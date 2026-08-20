@@ -31,7 +31,7 @@ async function signOut() {
       <div>
         <p class="stream-eyebrow">PUBLISHING DESK</p>
         <h1>主题管理</h1>
-        <p>创建、修改和整理公共知识轨道上的内容。</p>
+        <p>创建、修改和整理公共论坛中的内容。</p>
       </div>
       <div class="dashboard-actions">
         <button class="button button-quiet" type="button" @click="signOut">退出</button>

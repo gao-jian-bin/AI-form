@@ -3,7 +3,7 @@ import { ensureBaseCategories, saveTopic, type TopicInput } from './database'
 
 const DEMO_TOPICS: TopicInput[] = [
   {
-    title: '欢迎来到 AI 知识轨道',
+    title: '欢迎来到 AI 知识论坛',
     categorySlug: 'chatgpt',
     contentMarkdown: `这里收录能真正派上用场的 ChatGPT 技巧、提示词和 AI 工作流。
 

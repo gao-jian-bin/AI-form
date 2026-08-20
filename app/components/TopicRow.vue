@@ -21,38 +21,57 @@ const compactViews = computed(() => {
   return `${Math.round(value / 1000)}k`
 })
 
-const relativeDate = computed(() => {
-  const source = props.topic.publishedAt || props.topic.updatedAt
-  const elapsedDays = Math.max(0, Math.floor((Date.now() - new Date(source).getTime()) / 86_400_000))
-  if (elapsedDays === 0) return '今天'
-  if (elapsedDays === 1) return '昨天'
-  if (elapsedDays < 30) return `${elapsedDays} 天前`
-  return new Intl.DateTimeFormat('zh-CN', { month: 'short', day: 'numeric' }).format(new Date(source))
+const activityDate = computed(() => new Date(props.topic.publishedAt || props.topic.updatedAt))
+const activityLabel = computed(() => {
+  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - activityDate.value.getTime()) / 60_000))
+  if (elapsedMinutes < 1) return '刚刚'
+  if (elapsedMinutes < 60) return `${elapsedMinutes} 分钟`
+  const hours = Math.floor(elapsedMinutes / 60)
+  if (hours < 24) return `${hours} 小时`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} 天`
+  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(activityDate.value)
 })
+const activityTitle = computed(() => new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+}).format(activityDate.value))
 </script>
 
 <template>
-  <article class="topic-row" :style="{ '--category-color': topic.category.color }">
-    <span class="topic-rail" aria-hidden="true" />
-    <div class="topic-main">
-      <div class="topic-kicker">
-        <span v-if="topic.isPinned" class="pin-badge" aria-label="置顶主题">置顶</span>
-        <span class="category-label">{{ topic.category.name }}</span>
-        <span v-if="externalHost" class="external-host">{{ externalHost }}</span>
-      </div>
-      <NuxtLink :to="topicUrl" class="topic-title" data-topic-title>
-        {{ topic.title }}
-      </NuxtLink>
-      <p class="topic-excerpt">{{ topic.excerpt }}</p>
-      <div v-if="topic.tags.length" class="topic-tags" aria-label="主题标签">
-        <NuxtLink v-for="tag in topic.tags" :key="tag" :to="`/tag/${encodeURIComponent(tag)}`" class="topic-tag">
-          #{{ tag }}
+  <tr class="topic-list-item" :class="{ pinned: topic.isPinned }" :data-topic-id="topic.id">
+    <td class="main-link topic-list-data">
+      <span class="link-top-line" role="heading" aria-level="2">
+        <svg v-if="topic.isPinned" class="topic-status-icon" viewBox="0 0 24 24" aria-label="置顶主题">
+          <path d="m15 4 5 5-3 1-4 4-1 5-2-2-5 5-2-2 5-5-2-2 5-1 4-4 1-3Z" />
+        </svg>
+        <NuxtLink :to="topicUrl" class="title raw-topic-link" data-topic-title>
+          {{ topic.title }}
         </NuxtLink>
+      </span>
+
+      <div class="link-bottom-line">
+        <NuxtLink :to="`/c/${topic.category.slug}`" class="badge-category">
+          <span class="badge-category__bullet" :style="{ backgroundColor: topic.category.color }" />
+          <span class="badge-category__name">{{ topic.category.name }}</span>
+        </NuxtLink>
+        <NuxtLink v-for="tag in topic.tags" :key="tag" :to="`/tag/${encodeURIComponent(tag)}`" class="discourse-tag">
+          {{ tag }}
+        </NuxtLink>
+        <span v-if="externalHost" class="topic-featured-link">↗ {{ externalHost }}</span>
       </div>
-    </div>
-    <div class="topic-stats" aria-label="主题统计">
-      <span><strong>{{ compactViews }}</strong> 浏览</span>
-      <time :datetime="topic.updatedAt">{{ relativeDate }}</time>
-    </div>
-  </article>
+    </td>
+
+    <td class="num views topic-list-data">
+      <span class="number">{{ compactViews }}</span>
+      <span class="mobile-stat-label">浏览</span>
+    </td>
+
+    <td class="activity num topic-list-data">
+      <time :datetime="activityDate.toISOString()" :title="activityTitle">{{ activityLabel }}</time>
+    </td>
+  </tr>
 </template>

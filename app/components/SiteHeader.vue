@@ -2,8 +2,12 @@
 import { onMounted, ref } from 'vue'
 
 const route = useRoute()
+const sidebarOpen = useState<boolean>('public-sidebar-open', () => false)
 const query = ref(typeof route.query.q === 'string' ? route.query.q : '')
+const searchOpen = ref(false)
 const isDark = ref(false)
+const searchInput = ref<HTMLInputElement | null>(null)
+const ready = ref(false)
 
 function applyTheme(dark: boolean) {
   isDark.value = dark
@@ -11,47 +15,74 @@ function applyTheme(dark: boolean) {
   localStorage.setItem('ai-forum-theme', dark ? 'dark' : 'light')
 }
 
-function submitSearch() {
+async function toggleSearch() {
+  if (window.matchMedia('(max-width: 700px)').matches) {
+    await navigateTo('/search')
+    return
+  }
+  searchOpen.value = !searchOpen.value
+  if (searchOpen.value) requestAnimationFrame(() => searchInput.value?.focus())
+}
+
+async function submitSearch() {
   const value = query.value.trim()
-  if (value) navigateTo({ path: '/search', query: { q: value } })
+  if (!value) return
+  searchOpen.value = false
+  await navigateTo({ path: '/search', query: { q: value } })
 }
 
 onMounted(() => {
   const saved = localStorage.getItem('ai-forum-theme')
   applyTheme(saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches)
+  ready.value = true
 })
 </script>
 
 <template>
-  <header class="site-header">
-    <div class="header-inner">
-      <NuxtLink to="/" class="site-brand" aria-label="AI 知识轨道首页">
-        <span class="brand-mark" aria-hidden="true">AI</span>
-        <span class="brand-copy">
-          <strong>知识轨道</strong>
-          <small>AI FIELD NOTES</small>
-        </span>
-      </NuxtLink>
+  <div class="d-header-wrap">
+    <header class="d-header">
+      <div class="wrap">
+        <div class="contents">
+          <button
+            class="header-icon-button header-sidebar-toggle"
+            type="button"
+            aria-label="打开导航菜单"
+            :aria-expanded="sidebarOpen"
+            :disabled="!ready"
+            @click="sidebarOpen = !sidebarOpen"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </button>
 
-      <nav class="primary-nav" aria-label="主要导航">
-        <NuxtLink to="/" exact-active-class="is-active">最新</NuxtLink>
-        <NuxtLink to="/c/chatgpt" active-class="is-active">ChatGPT</NuxtLink>
-        <NuxtLink to="/c/toolbox" active-class="is-active">工具箱</NuxtLink>
-      </nav>
+          <div class="title">
+            <NuxtLink id="site-text-logo" to="/">AI 知识论坛</NuxtLink>
+          </div>
 
-      <form class="header-search" role="search" @submit.prevent="submitSearch">
-        <label class="search-icon-label" for="site-search">
-          <span class="sr-only">搜索主题</span>
-          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" /></svg>
-        </label>
-        <input id="site-search" v-model="query" type="search" placeholder="搜索主题" autocomplete="off">
-        <kbd>⌘ K</kbd>
-      </form>
+          <div class="panel">
+            <button
+              id="search-button"
+              class="header-icon-button"
+              type="button"
+              aria-label="搜索"
+              :aria-expanded="searchOpen"
+              :disabled="!ready"
+              @click="toggleSearch"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+            </button>
+            <button class="header-icon-button" type="button" :disabled="!ready" :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'" @click="applyTheme(!isDark)">
+              <svg v-if="isDark" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+              <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/></svg>
+            </button>
 
-      <button class="icon-button" type="button" :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'" @click="applyTheme(!isDark)">
-        <svg v-if="isDark" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
-        <svg v-else aria-hidden="true" viewBox="0 0 24 24"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/></svg>
-      </button>
-    </div>
-  </header>
+            <form v-if="searchOpen" class="search-menu-panel" role="search" @submit.prevent="submitSearch">
+              <label class="sr-only" for="header-search-input">搜索主题</label>
+              <input id="header-search-input" ref="searchInput" v-model="query" type="search" placeholder="搜索主题和内容" autocomplete="off" @keydown.esc="searchOpen = false">
+              <button class="btn btn-primary" type="submit">搜索</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </header>
+  </div>
 </template>

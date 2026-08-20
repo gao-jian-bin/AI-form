@@ -1,4 +1,4 @@
-# AI 知识轨道
+# AI 知识论坛
 
 一个轻量、独立的论坛式个人知识站。界面参考 Discourse 的主题流信息结构，用于持续收录 ChatGPT 实践、AI 学习框架和实用在线工具。
 
@@ -6,7 +6,7 @@
 
 ## 当前功能
 
-- Discourse 风格的紧凑主题流，支持桌面三栏与手机单栏
+- 基于官方 Discourse 源码结构重做的侧栏、导航和紧凑主题表格
 - `ChatGPT`、`工具箱` 两个一级板块
 - 板块、标签和全文关键词筛选
 - Markdown 正文、代码块、引用、表格和安全外链
@@ -23,6 +23,10 @@
 - SQLite + better-sqlite3
 - Vitest
 - Docker / Docker Compose
+
+## Discourse 源码参考
+
+公共界面依据官方 `discourse/discourse` 仓库提交 `c69b1bb8` 的前端结构重新实现，主要参考顶部栏、17em 侧栏、导航控件、主题表格和移动主题行。项目没有引入 Discourse 的 Rails/Ember 运行代码、Logo 或品牌素材，也不需要 PostgreSQL、Redis 和 Sidekiq。
 
 ## 本地启动
 

@@ -5,7 +5,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { lang: 'zh-CN' },
-      titleTemplate: '%s · AI 知识轨道',
+      titleTemplate: '%s · AI 知识论坛',
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#f5f7fa' },
@@ -15,8 +15,8 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      siteName: 'AI 知识轨道',
-      siteDescription: '把好用的 AI 方法和工具，整理成随时能找到的主题。',
+      siteName: 'AI 知识论坛',
+      siteDescription: '以论坛主题的方式整理 ChatGPT 方法和实用工具。',
     },
   },
   nitro: {

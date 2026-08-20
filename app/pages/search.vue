@@ -19,7 +19,7 @@ useSeoMeta({
 <template>
   <ForumPage
     :title="query ? `搜索“${query}”` : '搜索主题'"
-    :description="query ? '在标题、摘要与正文中查找匹配内容。' : '在右上角输入你想查找的内容。'"
+    :description="query ? '在标题、摘要与正文中查找匹配内容。' : '在搜索框中输入你想查找的内容。'"
     :topics="query ? topics : []"
     :categories="categories"
     :pending="Boolean(query) && status === 'pending'"

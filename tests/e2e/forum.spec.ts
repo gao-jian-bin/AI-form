@@ -3,11 +3,30 @@ import { expect, test } from '@playwright/test'
 test('public visitors can browse topics without account controls', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('heading', { name: '最新主题' })).toBeVisible()
-  await expect(page.getByRole('link', { name: 'ChatGPT', exact: true }).first()).toBeVisible()
-  await expect(page.getByRole('link', { name: '工具箱', exact: true }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: 'AI 知识论坛' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '主题' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '浏览' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '活动' })).toBeVisible()
   await expect(page.getByText('Squoosh：在浏览器里压缩图片').first()).toBeVisible()
+  await expect(page.getByText('Squoosh 可以直观比较压缩前后的画质和体积').first()).toHaveCount(0)
   await expect(page.getByRole('link', { name: /登录|注册|发帖/ })).toHaveCount(0)
+})
+
+test('mobile layout opens the source-shaped sidebar without horizontal overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+
+  await page.getByRole('button', { name: '打开导航菜单' }).click()
+  const sidebar = page.getByRole('complementary', { name: '论坛导航' })
+  await expect(sidebar).toBeVisible()
+  await expect(sidebar.getByRole('link', { name: /^ChatGPT/ })).toBeVisible()
+  await expect(sidebar.getByRole('link', { name: /^工具箱/ })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await page.getByRole('button', { name: '关闭导航菜单' }).click()
+  await page.getByRole('button', { name: '搜索' }).click()
+  await expect(page).toHaveURL(/\/search$/)
+  await expect(page.getByRole('searchbox', { name: '搜索主题和内容' })).toBeVisible()
 })
 
 test('owner can create a draft that stays out of the public topic stream', async ({ page }) => {

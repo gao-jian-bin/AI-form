@@ -16,11 +16,11 @@ Deliver a standalone, deployable forum-style knowledge site for public reading a
 
 ## Visual system
 
-- Canvas: `#f5f7fa`; ink: `#172033`; primary: `#2563eb`; ChatGPT: `#0f9f7f`; Toolbox: `#d97706`.
-- Dense three-column forum layout on desktop and a single topic stream on mobile.
-- Chinese system sans-serif body typography with tighter display headings and tabular utility metadata.
-- A continuous category-colored “knowledge rail” anchors topic rows; other decoration stays quiet.
-- Motion is limited to state transitions and is removed when `prefers-reduced-motion` is active.
+- Reimplement the official Discourse source hierarchy instead of creating a separate blog identity.
+- Use the default Discourse-like `#222`, `#fff`, and `#08c` palette with one-pixel table borders.
+- Use a 17em desktop sidebar, an approximately 52px header, and an 1110px main content area.
+- Render topics as semantic table rows with topic, views, and activity columns.
+- Collapse the sidebar into a mobile drawer and stack row metadata under the topic title.
 
 ## Acceptance commands
 

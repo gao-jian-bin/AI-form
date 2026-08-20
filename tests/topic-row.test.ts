@@ -25,17 +25,21 @@ const NuxtLinkStub = {
 }
 
 describe('TopicRow', () => {
-  it('presents real forum metadata and keeps the title linked to the local topic', () => {
+  it('renders the source-shaped topic, views, and activity table cells without a blog excerpt', () => {
     const wrapper = mount(TopicRow, {
       props: { topic },
       global: { stubs: { NuxtLink: NuxtLinkStub } },
     })
 
+    expect(wrapper.element.tagName).toBe('TR')
+    expect(wrapper.get('td.main-link.topic-list-data').exists()).toBe(true)
     expect(wrapper.get('[data-topic-title]').text()).toBe(topic.title)
     expect(wrapper.get('[data-topic-title]').attributes('href')).toBe(`/t/${topic.slug}/${topic.id}`)
     expect(wrapper.text()).toContain('工具箱')
-    expect(wrapper.text()).toContain('1.3k 浏览')
+    expect(wrapper.get('td.views .number').text()).toBe('1.3k')
+    expect(wrapper.get('td.activity').text()).not.toBe('')
     expect(wrapper.text()).toContain('squoosh.app')
+    expect(wrapper.text()).not.toContain(topic.excerpt)
     expect(wrapper.text()).not.toContain('回复')
   })
 })
