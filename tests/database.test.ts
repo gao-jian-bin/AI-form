@@ -5,6 +5,7 @@ import {
   ensureBaseCategories,
   getPublicTopic,
   listCategories,
+  listPublicTags,
   listPublicTopics,
   migrateForumDatabase,
   recordTopicView,
@@ -141,5 +142,41 @@ describe('forum database', () => {
     })
 
     expect(topic.tags).toEqual(['C++', 'C#'])
+  })
+
+  it('lists every published tag independently from the active topic filter', () => {
+    saveTopic(db, {
+      title: '公开帖子一',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: ['Prompt', '工作流'],
+      isPinned: false,
+      externalUrl: null,
+    })
+    saveTopic(db, {
+      title: '公开帖子二',
+      categorySlug: 'toolbox',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: ['Prompt', '图片处理'],
+      isPinned: false,
+      externalUrl: null,
+    })
+    saveTopic(db, {
+      title: '私有草稿',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'draft',
+      tags: ['不应公开'],
+      isPinned: false,
+      externalUrl: null,
+    })
+
+    expect(listPublicTags(db)).toEqual([
+      expect.objectContaining({ name: 'Prompt', topicCount: 2 }),
+      expect.objectContaining({ name: '工作流', topicCount: 1 }),
+      expect.objectContaining({ name: '图片处理', topicCount: 1 }),
+    ])
   })
 })

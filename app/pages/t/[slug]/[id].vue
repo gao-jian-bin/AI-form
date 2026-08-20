@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ForumCategory, TopicDetail, TopicSummary } from '~/types/forum'
+import type { ForumCategory, ForumTag, TopicDetail, TopicSummary } from '~/types/forum'
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
@@ -11,12 +11,12 @@ if (error.value || !topic.value) {
 }
 
 const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
+const { data: tags } = await useFetch<ForumTag[]>('/api/tags', { default: () => [] })
 const { data: related } = await useFetch<TopicSummary[]>('/api/topics', {
   query: { category: topic.value.category.slug, limit: 5 },
   default: () => [],
 })
 const relatedTopics = computed(() => related.value.filter(item => item.id !== id.value).slice(0, 4))
-const sidebarTags = computed(() => [...new Set(related.value.flatMap(item => item.tags))])
 
 useSeoMeta({
   title: () => topic.value?.title || '主题',
@@ -34,7 +34,7 @@ onMounted(() => {
 <template>
   <div v-if="topic" class="discourse-wrap">
     <div id="main-outlet-wrapper" class="has-sidebar-page">
-      <ForumSidebar :categories="categories" :tags="sidebarTags" :active-category="topic.category.slug" />
+      <ForumSidebar :categories="categories" :tags="tags" :active-category="topic.category.slug" />
 
       <section id="main-outlet" class="topic-page-container">
         <header id="topic-title">

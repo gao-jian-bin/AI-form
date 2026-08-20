@@ -155,6 +155,8 @@ ai-forum/
 └─ compose.yaml
 ```
 
+需要修改站点文案、分类、标签折叠、Composer 尺寸或 Markdown 工具栏时，查看 [自定义修改指南](docs/customization-guide.md)。
+
 ## 上线前检查
 
 ```powershell

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { ForumCategory, TopicSummary } from '~/types/forum'
+import type { ForumCategory, ForumTag, TopicSummary } from '~/types/forum'
 
 const route = useRoute()
 const slug = computed(() => String(route.params.slug))
 const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
+const { data: tags } = await useFetch<ForumTag[]>('/api/tags', { default: () => [] })
 const { data: topics, status, error, refresh } = await useFetch<TopicSummary[]>('/api/topics', {
   query: { category: slug },
   default: () => [],
@@ -23,6 +24,7 @@ useSeoMeta({
     :description="category?.description || '这个板块还在整理中。'"
     :topics="topics"
     :categories="categories"
+    :tags="tags"
     :active-category="slug"
     :pending="status === 'pending'"
     :error-message="error?.statusMessage"

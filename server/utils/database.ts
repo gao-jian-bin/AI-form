@@ -29,6 +29,13 @@ export interface ForumCategory {
   topicCount: number
 }
 
+export interface ForumTag {
+  id: number
+  name: string
+  slug: string
+  topicCount: number
+}
+
 export interface TopicRecord {
   id: number
   title: string
@@ -219,6 +226,23 @@ export function listCategories(db: Database.Database): ForumCategory[] {
     position: row.position,
     topicCount: row.topic_count,
   }))
+}
+
+export function listPublicTags(db: Database.Database): ForumTag[] {
+  const tags = db.prepare(`
+    SELECT tags.id, tags.name, tags.slug, COUNT(DISTINCT topics.id) AS topic_count
+    FROM tags
+    JOIN topic_tags ON topic_tags.tag_id = tags.id
+    JOIN topics ON topics.id = topic_tags.topic_id AND topics.status = 'published'
+    GROUP BY tags.id
+  `).all().map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    topicCount: row.topic_count,
+  }))
+  return tags.sort((a: ForumTag, b: ForumTag) =>
+    b.topicCount - a.topicCount || a.name.localeCompare(b.name, 'zh-CN'))
 }
 
 export function listPublicTopics(

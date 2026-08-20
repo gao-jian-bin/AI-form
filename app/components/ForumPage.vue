@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import type { ForumCategory, TopicSummary } from '~/types/forum'
+import type { ForumCategory, ForumTag, TopicSummary } from '~/types/forum'
 
 const props = defineProps<{
   title: string
   description: string
   topics: TopicSummary[]
   categories: ForumCategory[]
+  tags: ForumTag[]
   pending?: boolean
   errorMessage?: string
   activeCategory?: string
+  activeTag?: string
   eyebrow?: string
 }>()
 
@@ -16,7 +18,6 @@ const emit = defineEmits<{ retry: [] }>()
 const route = useRoute()
 const searchValue = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const activeCategoryData = computed(() => props.categories.find(category => category.slug === props.activeCategory))
-const allTags = computed(() => [...new Set(props.topics.flatMap(topic => topic.tags))].sort((a, b) => a.localeCompare(b, 'zh-CN')))
 
 function selectCategory(event: Event) {
   const value = (event.target as HTMLSelectElement).value
@@ -37,7 +38,7 @@ function submitFullPageSearch() {
 <template>
   <div class="discourse-wrap">
     <div id="main-outlet-wrapper" class="has-sidebar-page">
-      <ForumSidebar :categories="categories" :tags="allTags" :active-category="activeCategory" />
+      <ForumSidebar :categories="categories" :tags="tags" :active-category="activeCategory" :active-tag="activeTag" />
 
       <section id="main-outlet" class="discovery-list-container" aria-labelledby="discovery-heading">
         <h1 id="discovery-heading" class="sr-only">{{ title }}</h1>
@@ -74,7 +75,7 @@ function submitFullPageSearch() {
                 <span class="sr-only">选择标签</span>
                 <select value="" @change="selectTag">
                   <option value="">所有标签</option>
-                  <option v-for="tag in allTags" :key="tag" :value="tag">{{ tag }}</option>
+                  <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
                 </select>
               </label>
             </div>

@@ -8,6 +8,13 @@ export interface ForumCategory {
   topicCount: number
 }
 
+export interface ForumTag {
+  id: number
+  name: string
+  slug: string
+  topicCount: number
+}
+
 export interface TopicSummary {
   id: number
   title: string

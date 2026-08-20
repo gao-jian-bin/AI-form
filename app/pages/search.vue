@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import type { ForumCategory, TopicSummary } from '~/types/forum'
+import type { ForumCategory, ForumTag, TopicSummary } from '~/types/forum'
 
 const route = useRoute()
 const query = computed(() => typeof route.query.q === 'string' ? route.query.q.trim() : '')
 const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
+const { data: tags } = await useFetch<ForumTag[]>('/api/tags', { default: () => [] })
 const { data: topics, status, error, refresh } = await useFetch<TopicSummary[]>('/api/topics', {
   query: { q: query },
   default: () => [],
@@ -22,6 +23,7 @@ useSeoMeta({
     :description="query ? '在标题、摘要与正文中查找匹配内容。' : '在搜索框中输入你想查找的内容。'"
     :topics="query ? topics : []"
     :categories="categories"
+    :tags="tags"
     :pending="Boolean(query) && status === 'pending'"
     :error-message="error?.statusMessage"
     eyebrow="SEARCH"
