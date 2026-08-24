@@ -32,10 +32,10 @@ export function requireAdmin(event: H3Event): string {
   return token as string
 }
 
-export function numericRouteId(value: string | undefined): number {
+export function numericRouteId(value: string | undefined, entity = '主题'): number {
   const id = Number(value)
   if (!Number.isSafeInteger(id) || id < 1) {
-    throw createError({ statusCode: 404, statusMessage: '主题不存在' })
+    throw createError({ statusCode: 404, statusMessage: `${entity}不存在` })
   }
   return id
 }
