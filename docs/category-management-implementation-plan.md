@@ -127,7 +127,7 @@ git commit -m "feat: add category data operations"
 - Create: `server/api/studio/categories/[id].put.ts`
 - Create: `server/api/studio/categories/[id].delete.ts`
 - Modify: `server/utils/http.ts`
-- Modify: `tests/auth.test.ts`
+- Modify: `tests/e2e/forum.spec.ts`
 
 **Interfaces:**
 - Consumes: database CRUD and `parseCategoryPayload` from Task 1.
@@ -135,13 +135,20 @@ git commit -m "feat: add category data operations"
 
 - [ ] **Step 1: Write a failing route protection test**
 
-Extend the existing auth test pattern to verify every `/api/studio/categories` handler calls `requireAdmin` before touching data, including list/read routes.
+Add a real HTTP assertion through Playwright's request context. This tests the application's security boundary rather than inspecting handler internals:
+
+```ts
+test('category admin API rejects public requests', async ({ request }) => {
+  const response = await request.get('/api/studio/categories')
+  expect(response.status()).toBe(401)
+})
+```
 
 - [ ] **Step 2: Run the auth test and confirm RED**
 
-Run: `npm.cmd test -- tests/auth.test.ts`
+Run: `npm.cmd run test:e2e -- --grep "category admin API rejects"`
 
-Expected: FAIL because the category route files do not exist.
+Expected: FAIL because the category route file does not exist and returns 404 rather than 401.
 
 - [ ] **Step 3: Implement the five category handlers**
 
@@ -160,16 +167,18 @@ export default defineEventHandler(async (event) => {
 
 For update, pass mode `update` and the numeric route ID. For delete, return `{ ok: true }`. Make `numericRouteId` accept an entity label so category errors say `板块不存在` while topic routes continue to say `主题不存在`.
 
-- [ ] **Step 4: Run auth and all unit tests and confirm GREEN**
+- [ ] **Step 4: Run route security and all unit tests and confirm GREEN**
+
+Run: `npm.cmd run test:e2e -- --grep "category admin API rejects"`
 
 Run: `npm.cmd test`
 
-Expected: every Vitest suite passes.
+Expected: the unauthenticated request returns 401 and every Vitest suite passes.
 
 - [ ] **Step 5: Commit Task 2**
 
 ```powershell
-git add server/api/studio/categories server/utils/http.ts tests/auth.test.ts
+git add server/api/studio/categories server/utils/http.ts tests/e2e/forum.spec.ts
 git commit -m "feat: expose protected category api"
 ```
 
@@ -335,4 +344,3 @@ Run: `git status --short`
 Run: `git diff --stat HEAD~4..HEAD`
 
 Confirm only planned application, test and documentation files changed and no database, environment secret or generated output is tracked.
-
