@@ -1,15 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type Database from 'better-sqlite3'
 import {
+  createCategory,
   createForumDatabase,
+  deleteCategory,
   ensureBaseCategories,
+  getStudioCategory,
   getPublicTopic,
   listCategories,
   listPublicTags,
   listPublicTopics,
+  listStudioCategories,
   migrateForumDatabase,
   recordTopicView,
   saveTopic,
+  updateCategory,
 } from '../server/utils/database'
 
 describe('forum database', () => {
@@ -28,6 +33,123 @@ describe('forum database', () => {
       expect.objectContaining({ name: 'ChatGPT', slug: 'chatgpt', position: 1 }),
       expect.objectContaining({ name: '工具箱', slug: 'toolbox', position: 2 }),
     ])
+  })
+
+  it('does not overwrite administrator changes when defaults are ensured again', () => {
+    const chatgpt = listCategories(db).find(category => category.slug === 'chatgpt')!
+    updateCategory(db, chatgpt.id, {
+      name: 'ChatGPT 实战',
+      description: '管理员修改后的说明',
+      color: '#2563eb',
+      position: 8,
+    })
+
+    ensureBaseCategories(db)
+
+    expect(getStudioCategory(db, chatgpt.id)).toEqual(expect.objectContaining({
+      name: 'ChatGPT 实战',
+      description: '管理员修改后的说明',
+      color: '#2563eb',
+      position: 8,
+    }))
+  })
+
+  it('creates, reads, updates, and orders administrator categories', () => {
+    const created = createCategory(db, {
+      name: 'AI 绘画',
+      slug: 'ai-image',
+      description: '绘画工具与学习资源',
+      color: '#7c3aed',
+      position: 3,
+    })
+
+    expect(getStudioCategory(db, created.id)).toEqual(expect.objectContaining({
+      name: 'AI 绘画',
+      slug: 'ai-image',
+      topicCount: 0,
+      draftTopicCount: 0,
+      publishedTopicCount: 0,
+    }))
+
+    const updated = updateCategory(db, created.id, {
+      name: 'AI 图像',
+      description: '图像生成与处理',
+      color: '#2563eb',
+      position: 0,
+    })
+
+    expect(updated).toEqual(expect.objectContaining({
+      name: 'AI 图像',
+      slug: 'ai-image',
+      color: '#2563eb',
+      position: 0,
+    }))
+    expect(listStudioCategories(db)[0]?.slug).toBe('ai-image')
+  })
+
+  it('rejects duplicate category slugs and names', () => {
+    expect(() => createCategory(db, {
+      name: '另一个 ChatGPT',
+      slug: 'chatgpt',
+      description: '',
+      color: '#111111',
+      position: 3,
+    })).toThrow('网址标识已被使用')
+
+    expect(() => createCategory(db, {
+      name: 'ChatGPT',
+      slug: 'chatgpt-copy',
+      description: '',
+      color: '#111111',
+      position: 3,
+    })).toThrow('板块名称已被使用')
+  })
+
+  it('counts drafts and published topics for category administrators', () => {
+    saveTopic(db, {
+      title: '板块草稿', categorySlug: 'chatgpt', contentMarkdown: '正文', status: 'draft',
+      tags: [], isPinned: false, externalUrl: null,
+    })
+    saveTopic(db, {
+      title: '板块公开帖', categorySlug: 'chatgpt', contentMarkdown: '正文', status: 'published',
+      tags: [], isPinned: false, externalUrl: null,
+    })
+
+    expect(listStudioCategories(db).find(category => category.slug === 'chatgpt')).toEqual(
+      expect.objectContaining({ topicCount: 2, draftTopicCount: 1, publishedTopicCount: 1 }),
+    )
+    expect(listCategories(db).find(category => category.slug === 'chatgpt')?.topicCount).toBe(1)
+  })
+
+  it.each([
+    ['draft', '仍有草稿'],
+    ['published', '仍有公开帖子'],
+  ] as const)('refuses to delete a category containing a %s topic', (status, title) => {
+    const category = createCategory(db, {
+      name: `不可删除-${status}`,
+      slug: `protected-${status}`,
+      description: '',
+      color: '#334155',
+      position: 5,
+    })
+    saveTopic(db, {
+      title, categorySlug: category.slug, contentMarkdown: '正文', status,
+      tags: [], isPinned: false, externalUrl: null,
+    })
+
+    expect(() => deleteCategory(db, category.id)).toThrow('板块中还有帖子，请先移动或删除这些帖子')
+  })
+
+  it('deletes an empty category but keeps at least one category', () => {
+    const empty = createCategory(db, {
+      name: '临时板块', slug: 'temporary', description: '', color: '#64748b', position: 9,
+    })
+    expect(deleteCategory(db, empty.id)).toBe(true)
+    expect(getStudioCategory(db, empty.id)).toBeNull()
+
+    const categories = listStudioCategories(db)
+    expect(deleteCategory(db, categories[1]!.id)).toBe(true)
+    expect(() => deleteCategory(db, categories[0]!.id)).toThrow('至少保留一个板块')
   })
 
   it('keeps drafts out of public lists and public detail responses', () => {

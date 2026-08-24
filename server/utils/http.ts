@@ -12,6 +12,18 @@ import { getForumDatabase } from './forum'
 
 export const ADMIN_SESSION_COOKIE = 'ai_forum_admin'
 
+const BAD_REQUEST_MESSAGES = new Set([
+  '标题不能为空',
+  '正文不能为空',
+  '板块不存在',
+  '主题不存在',
+  '工具链接必须是有效的 HTTP 或 HTTPS 地址',
+  '板块名称已被使用',
+  '网址标识已被使用',
+  '板块中还有帖子，请先移动或删除这些帖子',
+  '至少保留一个板块',
+])
+
 export function requireAdmin(event: H3Event): string {
   const token = getCookie(event, ADMIN_SESSION_COOKIE)
   if (!validateAdminSession(getForumDatabase(), token)) {
@@ -40,11 +52,7 @@ export function requestError(error: unknown): never {
     throw createError({ statusCode: 400, statusMessage: error.issues[0]?.message || '提交内容不完整' })
   }
   if (error && typeof error === 'object' && 'statusCode' in error) throw error
-  if (error instanceof Error && [
-    '标题不能为空', '正文不能为空', '板块不存在', '主题不存在',
-    '请选择 ChatGPT 或工具箱板块', '工具链接必须是有效的 HTTP 或 HTTPS 地址',
-    '只有工具箱主题可以设置工具链接',
-  ].includes(error.message)) {
+  if (error instanceof Error && BAD_REQUEST_MESSAGES.has(error.message)) {
     throw createError({ statusCode: 400, statusMessage: error.message })
   }
 

@@ -29,6 +29,21 @@ export interface ForumCategory {
   topicCount: number
 }
 
+export interface CategoryInput {
+  name: string
+  slug: string
+  description: string
+  color: string
+  position: number
+}
+
+export type CategoryUpdateInput = Omit<CategoryInput, 'slug'>
+
+export interface StudioCategory extends ForumCategory {
+  draftTopicCount: number
+  publishedTopicCount: number
+}
+
 export interface ForumTag {
   id: number
   name: string
@@ -189,16 +204,13 @@ export function migrateForumDatabase(db: Database.Database): void {
 }
 
 export function ensureBaseCategories(db: Database.Database): void {
+  const categoryCount = db.prepare('SELECT COUNT(*) AS count FROM categories').get() as { count: number }
+  if (categoryCount.count > 0) return
+
   const timestamp = nowIso()
   const insert = db.prepare(`
     INSERT INTO categories (name, slug, description, color, position, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(slug) DO UPDATE SET
-      name = excluded.name,
-      description = excluded.description,
-      color = excluded.color,
-      position = excluded.position,
-      updated_at = excluded.updated_at
   `)
 
   const transaction = db.transaction(() => {
@@ -226,6 +238,132 @@ export function listCategories(db: Database.Database): ForumCategory[] {
     position: row.position,
     topicCount: row.topic_count,
   }))
+}
+
+function mapStudioCategory(row: any): StudioCategory {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    color: row.color,
+    position: row.position,
+    topicCount: row.topic_count,
+    draftTopicCount: row.draft_topic_count,
+    publishedTopicCount: row.published_topic_count,
+  }
+}
+
+const STUDIO_CATEGORY_SELECT = `
+  SELECT categories.id, categories.name, categories.slug, categories.description,
+         categories.color, categories.position,
+         COUNT(topics.id) AS topic_count,
+         COUNT(CASE WHEN topics.status = 'draft' THEN 1 END) AS draft_topic_count,
+         COUNT(CASE WHEN topics.status = 'published' THEN 1 END) AS published_topic_count
+  FROM categories
+  LEFT JOIN topics ON topics.category_id = categories.id
+`
+
+export function listStudioCategories(db: Database.Database): StudioCategory[] {
+  return db.prepare(`${STUDIO_CATEGORY_SELECT}
+    GROUP BY categories.id
+    ORDER BY categories.position ASC, categories.id ASC
+  `).all().map(mapStudioCategory)
+}
+
+export function getStudioCategory(db: Database.Database, id: number): StudioCategory | null {
+  const row = db.prepare(`${STUDIO_CATEGORY_SELECT}
+    WHERE categories.id = ?
+    GROUP BY categories.id
+  `).get(id)
+  return row ? mapStudioCategory(row) : null
+}
+
+function assertUniqueCategory(
+  db: Database.Database,
+  input: { name: string; slug?: string },
+  exceptId?: number,
+): void {
+  const nameMatch = db.prepare(`
+    SELECT id FROM categories
+    WHERE name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)
+  `).get(input.name, exceptId ?? null, exceptId ?? null)
+  if (nameMatch) throw new Error('板块名称已被使用')
+
+  if (input.slug) {
+    const slugMatch = db.prepare(`
+      SELECT id FROM categories
+      WHERE slug = ? AND (? IS NULL OR id != ?)
+    `).get(input.slug, exceptId ?? null, exceptId ?? null)
+    if (slugMatch) throw new Error('网址标识已被使用')
+  }
+}
+
+export function createCategory(db: Database.Database, input: CategoryInput): StudioCategory {
+  const timestamp = nowIso()
+  const create = db.transaction(() => {
+    assertUniqueCategory(db, input)
+    const result = db.prepare(`
+      INSERT INTO categories (name, slug, description, color, position, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      input.name.trim(),
+      input.slug.trim(),
+      input.description.trim(),
+      input.color,
+      input.position,
+      timestamp,
+      timestamp,
+    )
+    return Number(result.lastInsertRowid)
+  })
+
+  const category = getStudioCategory(db, create())
+  if (!category) throw new Error('创建板块失败')
+  return category
+}
+
+export function updateCategory(
+  db: Database.Database,
+  id: number,
+  input: CategoryUpdateInput,
+): StudioCategory {
+  const update = db.transaction(() => {
+    if (!db.prepare('SELECT id FROM categories WHERE id = ?').get(id)) throw new Error('板块不存在')
+    assertUniqueCategory(db, { name: input.name.trim() }, id)
+    db.prepare(`
+      UPDATE categories
+      SET name = ?, description = ?, color = ?, position = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      input.name.trim(),
+      input.description.trim(),
+      input.color,
+      input.position,
+      nowIso(),
+      id,
+    )
+  })
+  update()
+
+  const category = getStudioCategory(db, id)
+  if (!category) throw new Error('板块不存在')
+  return category
+}
+
+export function deleteCategory(db: Database.Database, id: number): boolean {
+  const remove = db.transaction(() => {
+    if (!db.prepare('SELECT id FROM categories WHERE id = ?').get(id)) return false
+
+    const topics = db.prepare('SELECT COUNT(*) AS count FROM topics WHERE category_id = ?').get(id) as { count: number }
+    if (topics.count > 0) throw new Error('板块中还有帖子，请先移动或删除这些帖子')
+
+    const categories = db.prepare('SELECT COUNT(*) AS count FROM categories').get() as { count: number }
+    if (categories.count <= 1) throw new Error('至少保留一个板块')
+
+    return db.prepare('DELETE FROM categories WHERE id = ?').run(id).changes > 0
+  })
+  return remove()
 }
 
 export function listPublicTags(db: Database.Database): ForumTag[] {

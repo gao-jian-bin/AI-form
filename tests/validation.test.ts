@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseTopicPayload } from '../server/utils/validation'
+import { parseCategoryPayload, parseTopicPayload } from '../server/utils/validation'
 
 describe('parseTopicPayload', () => {
   it('normalizes a valid editor payload into the database contract', () => {
@@ -22,15 +22,30 @@ describe('parseTopicPayload', () => {
     })
   })
 
-  it('rejects unsupported sections and malformed external links', () => {
-    expect(() => parseTopicPayload({
-      title: '主题',
-      categorySlug: 'news',
+  it('accepts a dynamic category and an external link in any category', () => {
+    expect(parseTopicPayload({
+      title: 'AI 图像资源',
+      categorySlug: 'ai-image',
       contentMarkdown: '正文',
       tags: [],
       status: 'published',
       isPinned: false,
-    })).toThrow('请选择 ChatGPT 或工具箱板块')
+      externalUrl: 'https://example.com/resources',
+    })).toEqual(expect.objectContaining({
+      categorySlug: 'ai-image',
+      externalUrl: 'https://example.com/resources',
+    }))
+  })
+
+  it('rejects malformed category slugs and external links', () => {
+    expect(() => parseTopicPayload({
+      title: '主题',
+      categorySlug: 'AI News',
+      contentMarkdown: '正文',
+      tags: [],
+      status: 'published',
+      isPinned: false,
+    })).toThrow('板块网址标识格式不正确')
 
     expect(() => parseTopicPayload({
       title: '工具',
@@ -41,18 +56,6 @@ describe('parseTopicPayload', () => {
       isPinned: false,
       externalUrl: 'javascript:alert(1)',
     })).toThrow('工具链接必须是有效的 HTTP 或 HTTPS 地址')
-  })
-
-  it('does not allow a tool link on a ChatGPT topic', () => {
-    expect(() => parseTopicPayload({
-      title: 'ChatGPT 主题',
-      categorySlug: 'chatgpt',
-      contentMarkdown: '正文',
-      tags: [],
-      status: 'draft',
-      isPinned: false,
-      externalUrl: 'https://example.com/',
-    })).toThrow('只有工具箱主题可以设置工具链接')
   })
 
   it('keeps optional slug and excerpt fields when the editor supplies them', () => {
@@ -69,5 +72,46 @@ describe('parseTopicPayload', () => {
       slug: 'readable-topic',
       excerpt: '自定义摘要',
     }))
+  })
+})
+
+describe('parseCategoryPayload', () => {
+  it('normalizes a category creation payload', () => {
+    expect(parseCategoryPayload({
+      name: '  AI 绘画  ',
+      slug: 'ai-image',
+      description: '  图片生成与处理  ',
+      color: '#7C3AED',
+      position: 3,
+    }, 'create')).toEqual({
+      name: 'AI 绘画',
+      slug: 'ai-image',
+      description: '图片生成与处理',
+      color: '#7c3aed',
+      position: 3,
+    })
+  })
+
+  it('drops slug changes from category update payloads', () => {
+    expect(parseCategoryPayload({
+      name: 'AI 图像',
+      slug: 'changed-slug',
+      description: '',
+      color: '#2563eb',
+      position: 0,
+    }, 'update')).toEqual({
+      name: 'AI 图像',
+      description: '',
+      color: '#2563eb',
+      position: 0,
+    })
+  })
+
+  it.each([
+    [{ name: '板块', slug: 'AI Image', description: '', color: '#2563eb', position: 1 }, '网址标识只能使用小写字母、数字和短横线'],
+    [{ name: '板块', slug: 'ai-image', description: '', color: '#fff', position: 1 }, '颜色必须是六位十六进制色值'],
+    [{ name: '板块', slug: 'ai-image', description: '', color: '#2563eb', position: -1 }, '排序不能小于 0'],
+  ])('rejects invalid category values', (payload, message) => {
+    expect(() => parseCategoryPayload(payload, 'create')).toThrow(message)
   })
 })
