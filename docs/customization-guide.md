@@ -33,26 +33,38 @@ app/components/ForumSidebar.vue
 - `帖子`
 - `最新帖子`
 - `分类`
-- ChatGPT、工具箱的导航结构
+
+具体板块名称不是写在这里的，它们从数据库动态读取。请登录 `/studio/categories` 新增、改名、排序或删除板块。
 
 顶部搜索不在这个文件中，而在 `SiteHeader.vue`。目前只删除了侧栏搜索，顶部搜索仍然保留。
 
-## 3. 修改分类名称、颜色和说明
+## 3. 修改板块
 
-文件：
+日常管理不需要改源码。打开：
+
+```text
+http://localhost:3000/studio/categories
+```
+
+这里可以修改名称、说明、颜色和排序，也可以新增或删除空板块。板块的网址标识在创建后锁定，避免旧地址失效。
+
+只有需要修改“全新空数据库的默认板块”时，才编辑：
 
 ```text
 server/utils/database.ts
 ```
 
-搜索 `ensureBaseCategories`。下面两行分别创建 ChatGPT 和工具箱分类：
+搜索 `ensureBaseCategories`。它只在数据库没有任何板块时创建 ChatGPT 和工具箱；不会覆盖后台做过的修改。
 
-```ts
-insert.run('ChatGPT', 'chatgpt', '分类说明', '#0f9f7f', 1, timestamp, timestamp)
-insert.run('工具箱', 'toolbox', '分类说明', '#d97706', 2, timestamp, timestamp)
+板块功能的源码分工如下：
+
+```text
+app/pages/studio/categories/       管理页面
+app/components/CategoryEditor.vue  新建和编辑表单
+server/api/studio/categories/      管理员 API
+server/utils/validation.ts         输入格式校验
+server/utils/database.ts           SQLite 读写和删除保护
 ```
-
-参数顺序是：显示名称、URL slug、说明、颜色、排序。
 
 ## 4. 修改标签导航
 
@@ -90,7 +102,7 @@ app/components/TopicEditor.vue
 
 这里控制：
 
-- 标题、分类、标签和工具链接
+- 标题、动态分类、标签和外部网站地址
 - “更多设置”中的 Slug、摘要和置顶
 - Markdown 输入框和实时预览
 - 草稿与发布按钮
@@ -199,3 +211,22 @@ npm.cmd run test:e2e
 ```
 
 如果只修改文案或颜色，至少执行类型检查和生产构建；如果修改编辑器、标签或权限逻辑，应执行全部四条命令。
+
+## 11. 安全维护源码
+
+开始修改前创建分支：
+
+```powershell
+git status
+git switch -c feature/你的修改名称
+```
+
+修改过程中运行 `npm.cmd run dev` 看实时效果。检查通过后只提交自己修改的文件：
+
+```powershell
+git status
+git add 具体文件路径
+git commit -m "feat: 简短描述修改内容"
+```
+
+不要手动编辑 `node_modules`、`.nuxt`、`.output`，它们都会重新生成；也不要用文本编辑器打开 `.data/ai-forum.db`。数据库内容应通过后台或经过测试的数据库代码修改。

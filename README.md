@@ -7,12 +7,12 @@
 ## 当前功能
 
 - 基于官方 Discourse 源码结构重做的侧栏、导航和紧凑主题表格
-- `ChatGPT`、`工具箱` 两个一级板块
+- 后台可增删改查的一级板块，首次启动默认创建 `ChatGPT` 和 `工具箱`
 - 板块、标签和全文关键词筛选
 - Markdown 正文、代码块、引用、表格和安全外链
-- 工具箱主题的外部工具按钮
+- 任意板块帖子都可以添加可选的外部网站按钮
 - 深色模式、键盘焦点与减少动态效果支持
-- 私有站长登录、草稿、发布、编辑、置顶和删除
+- 私有站长登录、帖子 CRUD、板块 CRUD、草稿和置顶
 - HttpOnly 管理会话、登录限流、Markdown XSS 清理
 - SQLite 持久化、Docker 部署、站点地图和 robots.txt
 
@@ -59,6 +59,7 @@ npm.cmd run dev          # 开发服务器
 npm.cmd test             # 单元、数据和安全测试
 npm.cmd run typecheck    # Vue / TypeScript 类型检查
 npm.cmd run build        # 生产构建
+npm.cmd run test:e2e     # 构建后运行真实浏览器验收
 npm.cmd run db:seed      # 空数据库中写入 8 篇演示主题
 npm.cmd run password:hash -- "你的至少12位密码"
 ```
@@ -136,6 +137,14 @@ docker compose start forum
 
 备份文件可能包含未发布草稿，不要放进公开下载目录，也不要提交到 Git。
 
+## SQLite 和 MySQL
+
+本项目当前使用 **SQLite**。它不是某个在线服务，而是由应用直接读写的单个数据库文件：本地默认是 `.data/ai-forum.db`，Docker 部署时是 `data/ai-forum.db`。
+
+SQLite 适合当前这种单服务器、单管理员、以阅读为主的轻量论坛：不需要另外安装数据库服务，备份和迁移也只需要安全复制数据库文件。MySQL 则是独立运行的数据库服务，应用通过网络连接它，更适合大量并发写入、多个应用实例同时工作以及需要专职数据库运维的场景。
+
+两者不是简单改一个配置名就能互换。以后迁移到 MySQL，需要更换数据库驱动、编写表结构迁移和数据转换程序，并完整测试查询语法。当前规模优先使用 SQLite，维护成本更低。
+
 ## 项目结构
 
 ```text
@@ -155,7 +164,7 @@ ai-forum/
 └─ compose.yaml
 ```
 
-需要修改站点文案、分类、标签折叠、Composer 尺寸或 Markdown 工具栏时，查看 [自定义修改指南](docs/customization-guide.md)。
+日常发布和板块维护请查看 [管理员 CRUD 入门指南](docs/admin-crud-guide.md)。需要修改站点文案、标签折叠、Composer 尺寸或 Markdown 工具栏时，查看 [自定义修改指南](docs/customization-guide.md)。
 
 ## 上线前检查
 
@@ -163,6 +172,7 @@ ai-forum/
 npm.cmd test
 npm.cmd run typecheck
 npm.cmd run build
+npm.cmd run test:e2e
 ```
 
 然后确认：
