@@ -9,7 +9,7 @@
     "preview": "nuxt preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "nuxt build && node scripts/run-e2e.mjs",
     "typecheck": "nuxt typecheck",
     "db:seed": "tsx scripts/seed.ts",
     "password:hash": "tsx scripts/hash-password.ts",

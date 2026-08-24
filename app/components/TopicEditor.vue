@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { nextTick, onMounted, reactive, ref } from 'vue'
-import type { StudioTopic } from '~/types/forum'
+import type { ForumCategory, StudioTopic } from '~/types/forum'
 import { applyMarkdownAction, COMPOSER_TOOLS, type MarkdownAction } from '~/utils/markdown-editor'
 
 const props = defineProps<{ topic?: StudioTopic | null }>()
+const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
 
 const form = reactive({
   title: props.topic?.title || '',
   slug: props.topic?.slug || '',
   excerpt: props.topic?.excerpt || '',
-  categorySlug: props.topic?.category.slug || 'chatgpt',
+  categorySlug: props.topic?.category.slug || categories.value[0]?.slug || '',
   tags: props.topic?.tags.join(', ') || '',
   contentMarkdown: props.topic?.contentMarkdown || '',
   externalUrl: props.topic?.externalUrl || '',
@@ -78,7 +79,7 @@ async function save(status: 'draft' | 'published') {
       body: {
         ...form,
         status,
-        externalUrl: form.categorySlug === 'toolbox' ? form.externalUrl : '',
+        externalUrl: form.externalUrl,
       },
     })
     await navigateTo('/studio')
@@ -109,6 +110,9 @@ onMounted(updatePreview)
     </header>
 
     <div v-if="errorMessage" class="form-alert composer-alert" role="alert">{{ errorMessage }}</div>
+    <div v-else-if="!categories.length" class="form-alert composer-alert" role="alert">
+      还没有可用板块，请先前往 <NuxtLink to="/studio/categories/new">板块管理</NuxtLink> 创建一个板块。
+    </div>
 
     <div class="reply-area">
       <div class="d-editor-container" :class="{ 'show-mobile-preview': mobilePane === 'preview' }">
@@ -121,9 +125,8 @@ onMounted(updatePreview)
           <div class="title-and-category">
             <label class="composer-select category-input">
               <span class="sr-only">分类</span>
-              <select v-model="form.categorySlug">
-                <option value="chatgpt">ChatGPT</option>
-                <option value="toolbox">工具箱</option>
+              <select v-model="form.categorySlug" required>
+                <option v-for="category in categories" :key="category.id" :value="category.slug">{{ category.name }}</option>
               </select>
             </label>
             <label class="composer-inline-input tags-input">
@@ -131,10 +134,10 @@ onMounted(updatePreview)
               <span class="sr-only">标签</span>
               <input v-model="form.tags" placeholder="可选标签，用逗号分隔">
             </label>
-            <label v-if="form.categorySlug === 'toolbox'" class="composer-inline-input external-url-input">
+            <label class="composer-inline-input external-url-input">
               <span class="composer-field-icon" aria-hidden="true">↗</span>
-              <span class="sr-only">工具链接</span>
-              <input v-model="form.externalUrl" type="url" placeholder="工具网站地址">
+              <span class="sr-only">外部网站地址</span>
+              <input v-model="form.externalUrl" type="url" placeholder="可选外部网站地址">
             </label>
           </div>
 
@@ -201,8 +204,8 @@ onMounted(updatePreview)
 
         <div class="submit-panel">
           <span class="draft-status">{{ busy ? '正在保存…' : '可保存为草稿' }}</span>
-          <button class="btn" type="button" :disabled="busy" @click="save('draft')">保存草稿</button>
-          <button class="btn btn-primary create" type="submit" :disabled="busy" title="Ctrl+Enter">{{ topic?.status === 'published' ? '保存修改' : '发布帖子' }}</button>
+          <button class="btn" type="button" :disabled="busy || !categories.length" @click="save('draft')">保存草稿</button>
+          <button class="btn btn-primary create" type="submit" :disabled="busy || !categories.length" title="Ctrl+Enter">{{ topic?.status === 'published' ? '保存修改' : '发布帖子' }}</button>
         </div>
       </footer>
     </div>

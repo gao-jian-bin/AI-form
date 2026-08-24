@@ -68,3 +68,59 @@ test('owner can create a draft that stays out of the public topic stream', async
   await page.goto('/')
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })
+
+test('owner can manage categories and use them in the topic editor', async ({ page }) => {
+  const suffix = Date.now()
+  const categorySlug = `ai-image-${suffix}`
+  const emptySlug = `empty-${suffix}`
+  const categoryName = `AI 绘画 ${suffix}`
+  const updatedCategoryName = `AI 图像 ${suffix}`
+  const draftTitle = `AI 图像草稿 ${suffix}`
+
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  await page.getByRole('link', { name: '板块管理' }).click()
+  await page.getByRole('link', { name: '＋ 新建板块' }).click()
+  await page.getByLabel('板块名称').fill(categoryName)
+  await page.getByLabel('网址标识').fill(categorySlug)
+  await page.getByLabel('板块说明').fill('图像生成与处理资源')
+  await page.getByLabel('板块颜色').fill('#7c3aed')
+  await page.getByLabel('显示顺序').fill('3')
+  await page.getByRole('button', { name: '创建板块' }).click()
+  await expect(page).toHaveURL(/\/studio\/categories$/)
+  await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
+
+  await page.getByRole('link', { name: '帖子管理' }).click()
+  await page.getByRole('link', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('textbox', { name: '标题', exact: true }).fill(draftTitle)
+  await page.getByLabel('分类').selectOption(categorySlug)
+  await page.getByLabel('外部网站地址').fill('https://example.com/ai-image')
+  await page.getByLabel('正文 · Markdown').fill('这是一篇放在动态板块中的草稿。')
+  await page.getByRole('button', { name: '保存草稿' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  await page.getByRole('link', { name: '板块管理' }).click()
+  const categoryRow = page.getByRole('row').filter({ hasText: categorySlug })
+  await categoryRow.getByRole('link', { name: '编辑' }).click()
+  await expect(page.getByLabel('网址标识')).toHaveAttribute('readonly', '')
+  await page.getByLabel('板块名称').fill(updatedCategoryName)
+  await page.getByRole('button', { name: '保存修改' }).click()
+  await expect(page.getByText(updatedCategoryName, { exact: true })).toBeVisible()
+
+  page.on('dialog', dialog => dialog.accept())
+  await page.getByRole('row').filter({ hasText: categorySlug }).getByRole('button', { name: '删除' }).click()
+  await expect(page.getByRole('alert')).toContainText('板块中还有帖子，请先移动或删除这些帖子')
+
+  await page.getByRole('link', { name: '＋ 新建板块' }).click()
+  await page.getByLabel('板块名称').fill('临时空板块')
+  await page.getByLabel('网址标识').fill(emptySlug)
+  await page.getByLabel('板块颜色').fill('#64748b')
+  await page.getByLabel('显示顺序').fill('99')
+  await page.getByRole('button', { name: '创建板块' }).click()
+  const emptyRow = page.getByRole('row').filter({ hasText: emptySlug })
+  await emptyRow.getByRole('button', { name: '删除' }).click()
+  await expect(page.getByText(emptySlug, { exact: true })).toHaveCount(0)
+})

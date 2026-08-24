@@ -13,17 +13,19 @@ export default defineConfig({
     channel: process.platform === 'win32' ? 'msedge' : undefined,
   },
   webServer: {
-    command: process.platform === 'win32'
-      ? 'npm.cmd run dev -- --host 127.0.0.1 --port 4190'
-      : 'npm run dev -- --host 127.0.0.1 --port 4190',
+    command: 'node .output/server/index.mjs',
     url: 'http://127.0.0.1:4190/api/categories',
-    reuseExistingServer: false,
+    reuseExistingServer: process.env.E2E_EXTERNAL_SERVER === 'true',
     timeout: 120_000,
     env: {
       ...process.env,
       NUXT_TELEMETRY_DISABLED: '1',
+      HOST: '127.0.0.1',
+      PORT: '4190',
       DATABASE_PATH: '.data/e2e-forum.db',
       SEED_DEMO_CONTENT: 'true',
+      ADMIN_PASSWORD: 'ai-forum-local-admin',
+      E2E_INSECURE_ADMIN_COOKIE: 'true',
       VIEW_HASH_SECRET: 'e2e-view-secret',
     },
   },

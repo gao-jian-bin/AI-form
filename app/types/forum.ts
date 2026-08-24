@@ -8,6 +8,11 @@ export interface ForumCategory {
   topicCount: number
 }
 
+export interface StudioCategory extends ForumCategory {
+  draftTopicCount: number
+  publishedTopicCount: number
+}
+
 export interface ForumTag {
   id: number
   name: string
