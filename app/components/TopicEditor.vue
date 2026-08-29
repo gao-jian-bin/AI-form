@@ -485,6 +485,43 @@ onBeforeUnmount(() => {
           </details>
         </section>
 
+        <div class="composer-format-bar" role="toolbar" aria-label="Markdown 工具栏">
+          <span class="composer-format-bar__label" aria-hidden="true">格式</span>
+          <button
+            v-for="tool in COMPOSER_TOOLS"
+            :key="tool.id"
+            class="toolbar__button"
+            type="button"
+            :aria-label="tool.label"
+            :title="tool.shortcut ? `${tool.label}（${tool.shortcut}）` : tool.label"
+            @click="applyTool(tool.id)"
+          >
+            <span :class="{ 'is-italic': tool.id === 'italic' }">{{ tool.text }}</span>
+          </button>
+          <span class="composer-format-bar__separator" aria-hidden="true" />
+          <input
+            ref="imageInput"
+            class="composer-image-input"
+            type="file"
+            :accept="IMAGE_ACCEPT"
+            multiple
+            tabindex="-1"
+            @change="handleImageSelection"
+          >
+          <button
+            class="toolbar__button"
+            type="button"
+            aria-label="上传图片"
+            title="上传图片（也可以直接粘贴或拖入）"
+            :disabled="uploadingImages > 0"
+            @click="chooseImages"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Zm2 12.5h12v-2.4l-3.1-3.1-2.4 2.4-4-4L6 13.4V18Zm9.5-8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+            </svg>
+          </button>
+        </div>
+
         <section class="d-editor-textarea-column">
           <label class="sr-only" for="composer-editor">正文 · Markdown</label>
           <div
@@ -531,41 +568,6 @@ onBeforeUnmount(() => {
             :class="{ active: mobilePane === 'preview' }"
             @click="mobilePane = 'preview'; updatePreview()"
           >预览</button>
-        </div>
-
-        <div class="composer-footer__toolbar" role="toolbar" aria-label="Markdown 工具栏">
-          <input
-            ref="imageInput"
-            class="composer-image-input"
-            type="file"
-            :accept="IMAGE_ACCEPT"
-            multiple
-            tabindex="-1"
-            @change="handleImageSelection"
-          >
-          <button
-            class="toolbar__button"
-            type="button"
-            aria-label="上传图片"
-            title="上传图片（也可以直接粘贴或拖入）"
-            :disabled="uploadingImages > 0"
-            @click="chooseImages"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Zm2 12.5h12v-2.4l-3.1-3.1-2.4 2.4-4-4L6 13.4V18Zm9.5-8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
-            </svg>
-          </button>
-          <button
-            v-for="tool in COMPOSER_TOOLS"
-            :key="tool.id"
-            class="toolbar__button"
-            type="button"
-            :aria-label="tool.label"
-            :title="tool.shortcut ? `${tool.label}（${tool.shortcut}）` : tool.label"
-            @click="applyTool(tool.id)"
-          >
-            <span :class="{ 'is-italic': tool.id === 'italic' }">{{ tool.text }}</span>
-          </button>
         </div>
 
         <div class="submit-panel">

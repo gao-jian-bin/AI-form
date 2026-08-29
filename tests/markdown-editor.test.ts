@@ -49,6 +49,60 @@ describe('applyMarkdownAction', () => {
     expect(applyMarkdownAction('前文a\nb后文', 2, 5, 'code').value)
       .toBe('前文\n\n```\na\nb\n```\n\n后文')
   })
+
+  it('adds GFM strikethrough while keeping the formatted text selected', () => {
+    expect(applyMarkdownAction('需要删除', 0, 4, 'strikethrough')).toEqual({
+      value: '~~需要删除~~',
+      selectionStart: 2,
+      selectionEnd: 6,
+    })
+  })
+
+  it('turns every selected line into a GFM task list item', () => {
+    expect(applyMarkdownAction('待办一\n待办二', 0, 7, 'task-list').value)
+      .toBe('- [ ] 待办一\n- [ ] 待办二')
+  })
+
+  it('inserts explicit heading and fenced code block formats', () => {
+    expect(applyMarkdownAction('', 0, 0, 'heading-3').value).toBe('### 三级标题')
+    expect(applyMarkdownAction('', 0, 0, 'code-block').value).toBe('```\n代码内容\n```')
+  })
+
+  it('inserts editable GFM tables and thematic breaks on block boundaries', () => {
+    const table = applyMarkdownAction('正文', 2, 2, 'table')
+    expect(table.value).toBe('正文\n\n| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |')
+    expect(table.value.slice(table.selectionStart, table.selectionEnd)).toBe('内容')
+
+    expect(applyMarkdownAction('正文', 2, 2, 'horizontal-rule')).toEqual({
+      value: '正文\n\n---',
+      selectionStart: 7,
+      selectionEnd: 7,
+    })
+  })
+
+  it('inserts a table after selected text without rewriting that text', () => {
+    const table = applyMarkdownAction('列', 0, 1, 'table')
+
+    expect(table.value).toBe('列\n\n| 列 1 | 列 2 |\n| --- | --- |\n| 内容 | 内容 |')
+    expect(table.value.slice(table.selectionStart, table.selectionEnd)).toBe('内容')
+    expect(table.selectionStart).toBeGreaterThan(table.value.indexOf('| --- |'))
+  })
+
+  it('preserves multiline, spaced, and pipe-containing selections when inserting a table', () => {
+    const selected = '  A | B\nC  '
+    const table = applyMarkdownAction(selected, 0, selected.length, 'table')
+
+    expect(table.value.startsWith(`${selected}\n\n| 列 1 | 列 2 |`)).toBe(true)
+    expect(table.value.slice(table.selectionStart, table.selectionEnd)).toBe('内容')
+  })
+
+  it('inserts a thematic break after selected text without deleting the selection', () => {
+    expect(applyMarkdownAction('保留我', 0, 3, 'horizontal-rule')).toEqual({
+      value: '保留我\n\n---',
+      selectionStart: 8,
+      selectionEnd: 8,
+    })
+  })
 })
 
 describe('insertMarkdownBlock', () => {

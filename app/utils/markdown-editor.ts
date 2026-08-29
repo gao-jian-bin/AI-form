@@ -1,12 +1,18 @@
 export type MarkdownAction =
   | 'bold'
   | 'italic'
+  | 'strikethrough'
   | 'link'
   | 'quote'
   | 'code'
+  | 'code-block'
   | 'bullet-list'
   | 'numbered-list'
+  | 'task-list'
   | 'heading'
+  | 'heading-3'
+  | 'table'
+  | 'horizontal-rule'
 
 export interface MarkdownEditResult {
   value: string
@@ -25,12 +31,18 @@ export interface ComposerTool {
 export const COMPOSER_TOOLS: ComposerTool[] = [
   { id: 'bold', label: '粗体', text: 'B', shortcut: 'Ctrl+B' },
   { id: 'italic', label: '斜体', text: 'I', shortcut: 'Ctrl+I' },
+  { id: 'strikethrough', label: '删除线', text: 'S̶' },
   { id: 'link', label: '插入链接', text: '🔗', shortcut: 'Ctrl+K' },
   { id: 'quote', label: '引用', text: '❝' },
-  { id: 'code', label: '代码', text: '</>' },
+  { id: 'code', label: '行内代码', text: '</>' },
+  { id: 'code-block', label: '代码块', text: '{ }' },
   { id: 'bullet-list', label: '无序列表', text: '•—' },
   { id: 'numbered-list', label: '有序列表', text: '1.' },
+  { id: 'task-list', label: '任务列表', text: '☐' },
   { id: 'heading', label: '二级标题', text: 'H2' },
+  { id: 'heading-3', label: '三级标题', text: 'H3' },
+  { id: 'table', label: '插入表格', text: '表' },
+  { id: 'horizontal-rule', label: '分割线', text: '—' },
 ]
 
 function replaceSelection(
@@ -141,6 +153,8 @@ export function applyMarkdownAction(
       return wrapSelection(value, start, end, '**', '**', '粗体文字')
     case 'italic':
       return wrapSelection(value, start, end, '*', '*', '斜体文字')
+    case 'strikethrough':
+      return wrapSelection(value, start, end, '~~', '~~', '删除线文字')
     case 'link': {
       const selected = value.slice(start, end) || '链接文字'
       return replaceSelection(value, start, end, `[${selected}](https://)`, 1, selected.length)
@@ -151,14 +165,32 @@ export function applyMarkdownAction(
       return prefixBlockLines(value, start, end, () => '- ', '列表项')
     case 'numbered-list':
       return prefixBlockLines(value, start, end, index => `${index + 1}. `, '列表项')
+    case 'task-list':
+      return prefixBlockLines(value, start, end, () => '- [ ] ', '待办事项')
     case 'heading':
       return prefixBlockLines(value, start, end, () => '## ', '标题')
+    case 'heading-3':
+      return prefixBlockLines(value, start, end, () => '### ', '三级标题')
     case 'code': {
       const selected = value.slice(start, end) || '代码'
       if (selected.includes('\n')) {
         return replaceBlock(value, start, end, `\`\`\`\n${selected}\n\`\`\``, 4, selected.length)
       }
       return wrapSelection(value, start, end, '`', '`', '代码')
+    }
+    case 'code-block': {
+      const selected = value.slice(start, end) || '代码内容'
+      return replaceBlock(value, start, end, `\`\`\`\n${selected}\n\`\`\``, 4, selected.length)
+    }
+    case 'table': {
+      const beforeSelection = '| 列 1 | 列 2 |\n| --- | --- |\n| '
+      const block = `${beforeSelection}内容 | 内容 |`
+      const insertionPoint = end > start ? end : start
+      return replaceBlock(value, insertionPoint, insertionPoint, block, beforeSelection.length, 2)
+    }
+    case 'horizontal-rule': {
+      const insertionPoint = end > start ? end : start
+      return replaceBlock(value, insertionPoint, insertionPoint, '---', 3, 0)
     }
   }
 }

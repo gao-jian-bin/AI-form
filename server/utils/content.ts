@@ -4,7 +4,7 @@ import sanitizeHtml from 'sanitize-html'
 const MARKDOWN_TAGS = [
   'p', 'br', 'strong', 'em', 'del', 'blockquote', 'code', 'pre',
   'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
-  'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  'a', 'img', 'input', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
 ]
 
 export function slugifyTopic(title: string): string {
@@ -21,10 +21,13 @@ export function slugifyTopic(title: string): string {
 export function excerptFromMarkdown(markdown: string, maxLength = 120): string {
   const plainText = markdown
     .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^[ \t]*(?=[^\r\n]*\|)(?=[^\r\n]*-)[|:\- \t]+$/gm, ' ')
+    .replace(/^[ \t]{0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/gm, ' ')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/<[^>]*>/g, ' ')
     .replace(/^[ \t]{0,3}(?:#{1,6}|>|[-+*])[ \t]+/gm, ' ')
+    .replace(/^[ \t]*\[[ xX]\][ \t]+/gm, '')
     .replace(/[ \t]+([*_~`]+)/g, '$1')
     .replace(/([*_~`]+)[ \t]+/g, '$1')
     .replace(/[*_~`|]+/g, '')
@@ -59,6 +62,7 @@ export function renderSafeMarkdown(markdown: string): string {
     allowedAttributes: {
       a: ['href', 'title', 'target', 'rel'],
       img: ['src', 'alt', 'title', 'loading'],
+      input: ['type', 'checked', 'disabled'],
       code: ['class'],
       th: ['align'],
       td: ['align'],
@@ -78,6 +82,14 @@ export function renderSafeMarkdown(markdown: string): string {
         attribs: {
           ...attribs,
           loading: 'lazy',
+        },
+      }),
+      input: (_tagName, attribs) => ({
+        tagName: 'input',
+        attribs: {
+          type: 'checkbox',
+          disabled: '',
+          ...(Object.prototype.hasOwnProperty.call(attribs, 'checked') ? { checked: '' } : {}),
         },
       }),
     },

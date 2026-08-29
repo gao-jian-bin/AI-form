@@ -127,11 +127,23 @@ test('owner can create a draft that stays out of the public topic stream', async
   await page.getByRole('button', { name: '进入工作台' }).click()
   await page.getByRole('button', { name: '＋ 新建帖子' }).click()
   await expect(page.getByText('创建新帖子', { exact: true })).toBeVisible()
-  await expect(page.getByRole('toolbar', { name: 'Markdown 工具栏' })).toBeVisible()
+  const formattingToolbar = page.getByRole('toolbar', { name: 'Markdown 工具栏' })
+  const markdownEditor = page.getByLabel('正文 · Markdown')
+  await expect(formattingToolbar).toBeVisible()
+  await expect(formattingToolbar.getByRole('button', { name: '删除线' })).toBeVisible()
+  await expect(formattingToolbar.getByRole('button', { name: '任务列表' })).toBeVisible()
+  await expect(formattingToolbar.getByRole('button', { name: '插入表格' })).toBeVisible()
+  const [toolbarBox, editorBox] = await Promise.all([
+    formattingToolbar.boundingBox(),
+    markdownEditor.boundingBox(),
+  ])
+  expect(toolbarBox).not.toBeNull()
+  expect(editorBox).not.toBeNull()
+  expect(toolbarBox!.y + toolbarBox!.height).toBeLessThanOrEqual(editorBox!.y + 1)
   await page.getByRole('button', { name: '粗体' }).click()
-  await expect(page.getByLabel('正文 · Markdown')).toHaveValue('**粗体文字**')
+  await expect(markdownEditor).toHaveValue('**粗体文字**')
   await page.getByRole('textbox', { name: '标题', exact: true }).fill(title)
-  await page.getByLabel('正文 · Markdown').fill('# 自动化验收\n\n这篇内容只能在管理工作台看到。')
+  await markdownEditor.fill('# 自动化验收\n\n这篇内容只能在管理工作台看到。')
   await page.getByRole('button', { name: '保存草稿' }).click()
 
   await expect(page).toHaveURL(/\/studio$/)
