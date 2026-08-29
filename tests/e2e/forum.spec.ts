@@ -453,6 +453,7 @@ test('administrator can override a topic publish time in the composer', async ({
   await expect(page).toHaveURL(/\/studio$/)
 
   const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
+  const editedTitle = await publishedRow.locator('td').first().locator('strong').innerText()
   await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
   const composer = page.getByRole('dialog', { name: '编辑帖子' })
   await composer.getByText('更多设置').click()
@@ -470,7 +471,18 @@ test('administrator can override a topic publish time in the composer', async ({
   expect(saved.publishedAt).toBe(new Date(localPublishTime).toISOString())
 
   await expect(composer).toBeHidden()
-  await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
+  const savedRow = page.getByRole('row').filter({ hasText: editedTitle })
+  await expect(savedRow.getByText('2024-01-02 03:04', { exact: true })).toBeVisible()
+  await expect(savedRow.getByText(/^修改 /)).toBeVisible()
+
+  const sortSelect = page.getByLabel('排序方式')
+  await expect(sortSelect).toBeVisible()
+  await sortSelect.selectOption('published-asc')
+  await expect(page.locator('.topic-management-table tbody tr').first()).toContainText(editedTitle)
+  await sortSelect.selectOption('published-desc')
+  await expect(page.locator('.topic-management-table tbody tr').first()).not.toContainText(editedTitle)
+
+  await savedRow.getByRole('button', { name: /编辑帖子/ }).click()
   const reopenedComposer = page.getByRole('dialog', { name: '编辑帖子' })
   await reopenedComposer.getByText('更多设置').click()
   await expect(reopenedComposer.getByLabel('发布时间')).toHaveValue(localPublishTime)

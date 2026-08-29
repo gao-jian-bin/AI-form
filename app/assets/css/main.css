@@ -1617,13 +1617,51 @@ html.composer-fullscreen body {
   background: var(--selected);
 }
 
-.studio-toolbar > input {
-  width: min(260px, 45%);
+.studio-toolbar__controls {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  gap: 8px;
+}
+
+.studio-toolbar__controls input,
+.studio-sort-control select {
   height: 36px;
   padding: 0 11px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--surface-subtle);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.studio-toolbar__controls input {
+  width: min(260px, 45%);
+}
+
+.studio-sort-control select {
+  min-width: 154px;
+}
+
+.studio-topic-time time,
+.studio-topic-time small,
+.studio-topic-time__unpublished {
+  display: block;
+  white-space: nowrap;
+}
+
+.studio-topic-time time {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.studio-topic-time small,
+.studio-topic-time__unpublished {
+  margin-top: 3px;
+  color: var(--ink-faint);
+  font-size: 10px;
 }
 
 .studio-table-wrap {
@@ -2292,7 +2330,15 @@ html.composer-fullscreen body {
     display: grid;
   }
 
-  .studio-toolbar > input {
+  .studio-toolbar__controls {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .studio-toolbar__controls input,
+  .studio-sort-control,
+  .studio-sort-control select {
     width: 100%;
   }
 
