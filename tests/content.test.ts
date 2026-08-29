@@ -26,6 +26,10 @@ describe('validateExternalUrl', () => {
 })
 
 describe('renderSafeMarkdown', () => {
+  it('renders blockquotes used by the composer preview', () => {
+    expect(renderSafeMarkdown('正文\n\n> 引用内容')).toContain('<blockquote>')
+  })
+
   it('renders useful Markdown while removing scripts, raw HTML, and unsafe links', () => {
     const html = renderSafeMarkdown('## 示例\n\n[安全](https://example.com) [危险](javascript:alert(1))\n\n<script>alert(1)</script>')
 

@@ -48,6 +48,37 @@ function replaceSelection(
   }
 }
 
+function replaceBlock(
+  value: string,
+  start: number,
+  end: number,
+  block: string,
+  innerStart = 0,
+  innerLength = block.length,
+): MarkdownEditResult {
+  const before = value.slice(0, start)
+  const after = value.slice(end)
+  const leading = !before
+    ? ''
+    : before.endsWith('\n\n')
+      ? ''
+      : before.endsWith('\n') ? '\n' : '\n\n'
+  const trailing = !after
+    ? ''
+    : after.startsWith('\n\n')
+      ? ''
+      : after.startsWith('\n') ? '\n' : '\n\n'
+
+  return replaceSelection(
+    value,
+    start,
+    end,
+    `${leading}${block}${trailing}`,
+    leading.length + innerStart,
+    innerLength,
+  )
+}
+
 function wrapSelection(
   value: string,
   start: number,
@@ -67,19 +98,27 @@ function wrapSelection(
   )
 }
 
-function prefixLines(
+function prefixBlockLines(
   value: string,
   start: number,
   end: number,
   prefix: (index: number) => string,
   placeholder: string,
 ): MarkdownEditResult {
-  const selected = value.slice(start, end) || placeholder
+  const hasSelection = end > start
+  const selected = hasSelection ? value.slice(start, end) : placeholder
   const replacement = selected
     .split('\n')
     .map((line, index) => `${prefix(index)}${line}`)
     .join('\n')
-  return replaceSelection(value, start, end, replacement, 0, replacement.length)
+  return replaceBlock(
+    value,
+    start,
+    end,
+    replacement,
+    hasSelection ? 0 : prefix(0).length,
+    hasSelection ? replacement.length : placeholder.length,
+  )
 }
 
 export function applyMarkdownAction(
@@ -98,17 +137,17 @@ export function applyMarkdownAction(
       return replaceSelection(value, start, end, `[${selected}](https://)`, 1, selected.length)
     }
     case 'quote':
-      return prefixLines(value, start, end, () => '> ', '引用内容')
+      return prefixBlockLines(value, start, end, () => '> ', '引用内容')
     case 'bullet-list':
-      return prefixLines(value, start, end, () => '- ', '列表项')
+      return prefixBlockLines(value, start, end, () => '- ', '列表项')
     case 'numbered-list':
-      return prefixLines(value, start, end, index => `${index + 1}. `, '列表项')
+      return prefixBlockLines(value, start, end, index => `${index + 1}. `, '列表项')
     case 'heading':
-      return prefixLines(value, start, end, () => '## ', '标题')
+      return prefixBlockLines(value, start, end, () => '## ', '标题')
     case 'code': {
       const selected = value.slice(start, end) || '代码'
       if (selected.includes('\n')) {
-        return replaceSelection(value, start, end, `\`\`\`\n${selected}\n\`\`\``, 4, selected.length)
+        return replaceBlock(value, start, end, `\`\`\`\n${selected}\n\`\`\``, 4, selected.length)
       }
       return wrapSelection(value, start, end, '`', '`', '代码')
     }

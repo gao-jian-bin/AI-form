@@ -16,6 +16,22 @@ describe('applyMarkdownAction', () => {
     expect(applyMarkdownAction('苹果\n香蕉', 0, 5, 'numbered-list').value).toBe('1. 苹果\n2. 香蕉')
   })
 
+  it('starts a placeholder quote on a valid Markdown block boundary', () => {
+    expect(applyMarkdownAction('正文', 2, 2, 'quote')).toEqual({
+      value: '正文\n\n> 引用内容',
+      selectionStart: 6,
+      selectionEnd: 10,
+    })
+  })
+
+  it.each([
+    ['bullet-list', '正文\n\n- 列表项'],
+    ['numbered-list', '正文\n\n1. 列表项'],
+    ['heading', '正文\n\n## 标题'],
+  ] as const)('starts %s placeholders on a valid Markdown block boundary', (action, expected) => {
+    expect(applyMarkdownAction('正文', 2, 2, action).value).toBe(expected)
+  })
+
   it('inserts an editable Markdown link when there is no selection', () => {
     expect(applyMarkdownAction('', 0, 0, 'link')).toEqual({
       value: '[链接文字](https://)',
@@ -27,5 +43,10 @@ describe('applyMarkdownAction', () => {
   it('uses fenced code for multiline selections and inline code for one line', () => {
     expect(applyMarkdownAction('const a = 1', 0, 11, 'code').value).toBe('`const a = 1`')
     expect(applyMarkdownAction('a\nb', 0, 3, 'code').value).toBe('```\na\nb\n```')
+  })
+
+  it('separates fenced code from surrounding paragraph text', () => {
+    expect(applyMarkdownAction('前文a\nb后文', 2, 5, 'code').value)
+      .toBe('前文\n\n```\na\nb\n```\n\n后文')
   })
 })
