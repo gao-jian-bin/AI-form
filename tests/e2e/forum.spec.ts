@@ -58,7 +58,7 @@ test('owner can create a draft that stays out of the public topic stream', async
 
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await page.getByRole('link', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
   await expect(page.getByText('创建新帖子', { exact: true })).toBeVisible()
   await expect(page.getByRole('toolbar', { name: 'Markdown 工具栏' })).toBeVisible()
   await page.getByRole('button', { name: '粗体' }).click()
@@ -82,7 +82,7 @@ test('studio topic actions remain inside the desktop viewport', async ({ page })
   await expect(page).toHaveURL(/\/studio$/)
 
   const tableWrap = page.locator('.studio-table-wrap')
-  const firstEditLink = page.getByRole('link', { name: '编辑' }).first()
+  const firstEditLink = page.getByRole('button', { name: /编辑帖子/ }).first()
   await expect(firstEditLink).toBeVisible()
 
   const [wrapBox, editBox] = await Promise.all([
@@ -104,7 +104,7 @@ test('studio topic actions remain visible on a narrow screen', async ({ page }) 
   await expect(page).toHaveURL(/\/studio$/)
 
   const tableWrap = page.locator('.studio-table-wrap')
-  const firstEditLink = page.getByRole('link', { name: '编辑' }).first()
+  const firstEditLink = page.getByRole('button', { name: /编辑帖子/ }).first()
   const firstDeleteButton = page.getByRole('button', { name: '删除' }).first()
   const [wrapBox, editBox, deleteBox] = await Promise.all([
     tableWrap.boundingBox(),
@@ -118,6 +118,19 @@ test('studio topic actions remain visible on a narrow screen', async ({ page }) 
   expect(editBox!.x).toBeGreaterThanOrEqual(wrapBox!.x)
   expect(editBox!.x + editBox!.width).toBeLessThanOrEqual(wrapBox!.x + wrapBox!.width)
   expect(deleteBox!.x + deleteBox!.width).toBeLessThanOrEqual(wrapBox!.x + wrapBox!.width)
+})
+
+test('studio edit opens a docked composer without leaving the topic list', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+  const urlBefore = page.url()
+
+  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+
+  await expect(page.getByRole('dialog', { name: '编辑帖子' })).toBeVisible()
+  await expect(page).toHaveURL(urlBefore)
 })
 
 test('owner can manage categories and use them in the topic editor', async ({ page }) => {
@@ -145,7 +158,7 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
 
   await page.getByRole('link', { name: '帖子管理' }).click()
-  await page.getByRole('link', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
   await page.getByRole('textbox', { name: '标题', exact: true }).fill(draftTitle)
   await page.getByLabel('分类').selectOption(categorySlug)
   await page.getByLabel('外部网站地址').fill('https://example.com/ai-image')

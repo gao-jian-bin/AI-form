@@ -7,6 +7,8 @@ useSeoMeta({ title: '内容工作台', robots: 'noindex, nofollow' })
 const filter = ref<'all' | 'published' | 'draft'>('all')
 const query = ref('')
 const { data: topics, refresh } = await useFetch<StudioTopic[]>('/api/studio/topics', { default: () => [] })
+const { openEdit, openNew, revision } = useAdminComposer()
+watch(revision, () => refresh())
 const visibleTopics = computed(() => topics.value.filter((topic) => {
   const matchesStatus = filter.value === 'all' || topic.status === filter.value
   const matchesQuery = !query.value.trim() || topic.title.toLowerCase().includes(query.value.trim().toLowerCase())
@@ -35,7 +37,7 @@ async function signOut() {
       </div>
       <div class="dashboard-actions">
         <button class="button button-quiet" type="button" @click="signOut">退出</button>
-        <NuxtLink to="/studio/topics/new" class="button button-primary">＋ 新建帖子</NuxtLink>
+        <button class="button button-primary" type="button" @click="openNew">＋ 新建帖子</button>
       </div>
     </header>
 
@@ -59,13 +61,13 @@ async function signOut() {
             <td>{{ topic.viewCount }}</td>
             <td>{{ new Date(topic.updatedAt).toLocaleDateString('zh-CN') }}</td>
             <td class="row-actions">
-              <NuxtLink :to="`/studio/topics/${topic.id}/edit`" :aria-label="`编辑帖子：${topic.title}`" title="编辑帖子">
+              <button type="button" :aria-label="`编辑帖子：${topic.title}`" title="编辑帖子" @click="openEdit(topic.id)">
                 <svg class="row-action-icon" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
                   <path d="m13.5 6.5 4 4" />
                 </svg>
                 <span>编辑</span>
-              </NuxtLink>
+              </button>
               <button type="button" @click="removeTopic(topic)">删除</button>
             </td>
           </tr>
