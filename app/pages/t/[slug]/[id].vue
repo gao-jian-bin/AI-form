@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ForumCategory, ForumTag, TopicDetail, TopicSummary } from '~/types/forum'
+import { formatDottedDate } from '~/utils/date-format'
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
@@ -61,7 +62,7 @@ onMounted(() => {
                 <div class="names"><strong>站长</strong><span>内容维护者</span></div>
                 <div class="post-infos">
                   <span>{{ topic.viewCount }} 次浏览</span>
-                  <time :datetime="topic.publishedAt || topic.createdAt">{{ new Date(topic.publishedAt || topic.createdAt).toLocaleDateString('zh-CN') }}</time>
+                  <time :datetime="topic.publishedAt || topic.createdAt">{{ formatDottedDate(topic.publishedAt || topic.createdAt) }}</time>
                   <span class="post-number">#1</span>
                 </div>
               </div>

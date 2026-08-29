@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TopicSummary } from '~/types/forum'
+import { formatDottedDate } from '../utils/date-format'
 
 const props = defineProps<{ topic: TopicSummary }>()
 
@@ -22,16 +23,7 @@ const compactViews = computed(() => {
 })
 
 const activityDate = computed(() => new Date(props.topic.publishedAt || props.topic.updatedAt))
-const activityLabel = computed(() => {
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - activityDate.value.getTime()) / 60_000))
-  if (elapsedMinutes < 1) return '刚刚'
-  if (elapsedMinutes < 60) return `${elapsedMinutes} 分钟`
-  const hours = Math.floor(elapsedMinutes / 60)
-  if (hours < 24) return `${hours} 小时`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days} 天`
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(activityDate.value)
-})
+const activityLabel = computed(() => formatDottedDate(activityDate.value))
 const activityTitle = computed(() => new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
   month: 'long',

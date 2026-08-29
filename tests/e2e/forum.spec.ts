@@ -467,7 +467,7 @@ test('administrator can override a topic publish time in the composer', async ({
     && /\/api\/studio\/topics\/\d+$/.test(new URL(response.url()).pathname),
   )
   await composer.getByRole('button', { name: '保存修改' }).click()
-  const saved = await (await saveResponse).json() as { publishedAt: string }
+  const saved = await (await saveResponse).json() as { id: number, slug: string, publishedAt: string }
   expect(saved.publishedAt).toBe(new Date(localPublishTime).toISOString())
 
   await expect(composer).toBeHidden()
@@ -486,6 +486,12 @@ test('administrator can override a topic publish time in the composer', async ({
   const reopenedComposer = page.getByRole('dialog', { name: '编辑帖子' })
   await reopenedComposer.getByText('更多设置').click()
   await expect(reopenedComposer.getByLabel('发布时间')).toHaveValue(localPublishTime)
+  await reopenedComposer.getByRole('button', { name: '关闭编辑器' }).click()
+
+  await page.goto(`/t/${saved.slug}/${saved.id}`)
+  await expect(page.locator('.post-infos time')).toHaveText('2024.01.02')
+  await page.goto('/')
+  await expect(page.locator(`[data-topic-id="${saved.id}"] td.activity time`)).toHaveText('2024.01.02')
 })
 
 test('unsaved composer changes require confirmation before closing', async ({ page }) => {

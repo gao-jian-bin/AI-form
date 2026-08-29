@@ -37,7 +37,7 @@ describe('TopicRow', () => {
     expect(wrapper.get('[data-topic-title]').attributes('href')).toBe(`/t/${topic.slug}/${topic.id}`)
     expect(wrapper.text()).toContain('工具箱')
     expect(wrapper.get('td.views .number').text()).toBe('1.3k')
-    expect(wrapper.get('td.activity').text()).not.toBe('')
+    expect(wrapper.get('td.activity time').text()).toBe('2026.08.20')
     expect(wrapper.text()).toContain('squoosh.app')
     expect(wrapper.text()).not.toContain(topic.excerpt)
     expect(wrapper.text()).not.toContain('回复')
