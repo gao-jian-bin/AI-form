@@ -906,7 +906,18 @@ select {
 .post-actions {
   margin-top: 1.5em;
   display: flex;
+  gap: 0.5em;
   justify-content: flex-end;
+}
+
+.post-action-menu__edit {
+  color: var(--primary-medium);
+  background: transparent;
+}
+
+.post-action-menu__edit:hover {
+  color: var(--primary);
+  background: var(--primary-very-low);
 }
 
 .suggested-topics {

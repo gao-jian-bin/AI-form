@@ -3,7 +3,7 @@ import type { ForumCategory, ForumTag, TopicDetail, TopicSummary } from '~/types
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
-const { data: topic, error } = await useFetch<TopicDetail>(() => `/api/topics/${id.value}`)
+const { data: topic, error, refresh } = await useFetch<TopicDetail>(() => `/api/topics/${id.value}`)
 useCanonical(() => route.path)
 
 if (error.value || !topic.value) {
@@ -12,6 +12,11 @@ if (error.value || !topic.value) {
 
 const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
 const { data: tags } = await useFetch<ForumTag[]>('/api/tags', { default: () => [] })
+const { data: adminSession } = await useFetch<{ authenticated: boolean }>('/api/auth/session', {
+  default: () => ({ authenticated: false }),
+})
+const { openEdit, revision } = useAdminComposer()
+watch(revision, () => refresh())
 const { data: related } = await useFetch<TopicSummary[]>('/api/topics', {
   query: { category: topic.value.category.slug, limit: 5 },
   default: () => [],
@@ -63,11 +68,25 @@ onMounted(() => {
 
               <div class="cooked markdown-body" v-html="topic.contentHtml" />
 
-              <div v-if="topic.externalUrl" class="post-actions">
-                <a :href="topic.externalUrl" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+              <div v-if="topic.externalUrl || adminSession.authenticated" class="post-actions">
+                <a v-if="topic.externalUrl" :href="topic.externalUrl" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
                   访问工具
                   <span aria-hidden="true">↗</span>
                 </a>
+                <button
+                  v-if="adminSession.authenticated"
+                  class="btn post-action-menu__edit"
+                  type="button"
+                  aria-label="编辑帖子"
+                  title="编辑帖子"
+                  @click="openEdit(topic.id)"
+                >
+                  <svg class="row-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
+                    <path d="m13.5 6.5 4 4" />
+                  </svg>
+                  <span>编辑</span>
+                </button>
               </div>
             </div>
           </article>

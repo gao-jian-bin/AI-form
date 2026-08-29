@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import type { StudioTopic } from '~/types/forum'
-
 definePageMeta({ layout: 'studio', middleware: 'admin' })
+useSeoMeta({ title: '编辑帖子', robots: 'noindex, nofollow' })
+
 const route = useRoute()
-const { data: topic, error } = await useFetch<StudioTopic>(() => `/api/studio/topics/${route.params.id}`)
-if (error.value || !topic.value) throw createError({ statusCode: 404, statusMessage: '主题不存在' })
-useSeoMeta({ title: () => `编辑：${topic.value?.title || '主题'}`, robots: 'noindex, nofollow' })
+const { openEdit } = useAdminComposer()
+
+onMounted(async () => {
+  openEdit(Number(route.params.id))
+  await navigateTo('/studio', { replace: true })
+})
 </script>
 
-<template><TopicEditor :topic="topic" /></template>
+<template>
+  <p role="status">正在打开编辑器…</p>
+</template>

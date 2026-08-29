@@ -157,6 +157,44 @@ test('studio edit opens a docked composer without leaving the topic list', async
   await expect(page.locator('.composer-page-backdrop')).toHaveCount(0)
 })
 
+test('administrator edits a public topic from its Discourse pencil action', async ({ page }) => {
+  await page.goto('/studio/sign-in')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Squoosh：在浏览器里压缩图片' }).click()
+  await expect(page).toHaveURL(/\/t\//)
+  const topicUrl = page.url()
+
+  await page.getByRole('button', { name: '编辑帖子' }).click()
+
+  await expect(page.getByRole('dialog', { name: '编辑帖子' })).toBeVisible()
+  await expect(page).toHaveURL(topicUrl)
+})
+
+test('public visitors never see the topic edit pencil', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('link', { name: 'Squoosh：在浏览器里压缩图片' }).click()
+  await expect(page.getByRole('button', { name: '编辑帖子' })).toHaveCount(0)
+})
+
+test('legacy compatible composer routes open the global composer', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  await page.goto('/studio/topics/1/edit')
+  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page.getByRole('dialog', { name: '编辑帖子' })).toBeVisible()
+  await page.getByRole('button', { name: '关闭编辑器' }).click()
+
+  await page.goto('/studio/topics/new')
+  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page.getByRole('dialog', { name: '创建新帖子' })).toBeVisible()
+})
+
 test('owner can manage categories and use them in the topic editor', async ({ page }) => {
   const suffix = Date.now()
   const categorySlug = `ai-image-${suffix}`
