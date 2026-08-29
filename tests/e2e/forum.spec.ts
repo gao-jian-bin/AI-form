@@ -254,6 +254,17 @@ test('mobile composer keeps editing, preview and save controls usable', async ({
   expect(composerBox!.height).toBeLessThanOrEqual(Math.ceil(844 * 0.78))
   expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(844)
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await composer.getByRole('button', { name: '全屏编辑' }).click()
+  const fullscreenBox = await page.locator('#reply-control').boundingBox()
+  expect(fullscreenBox).not.toBeNull()
+  expect(fullscreenBox!.x).toBe(0)
+  expect(fullscreenBox!.y).toBe(0)
+  expect(fullscreenBox!.width).toBe(390)
+  expect(fullscreenBox!.height).toBe(844)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await composer.getByRole('button', { name: '退出全屏' }).click()
+  await expect(page.locator('#reply-control')).not.toHaveClass(/fullscreen/)
 })
 
 test('administrator edits a public topic from its Discourse pencil action', async ({ page }) => {
