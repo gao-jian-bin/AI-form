@@ -234,6 +234,24 @@ describe('forum database', () => {
     expect(topic.publishedAt).toBe('2024-01-01T08:00:00.000Z')
   })
 
+  it('automatically timestamps publication when no manual time is supplied', () => {
+    const beforeSave = Date.now()
+    const topic = saveTopic(db, {
+      title: '正常发布',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: [],
+      isPinned: false,
+      externalUrl: null,
+    })
+    const afterSave = Date.now()
+    const publishedAt = new Date(topic.publishedAt!).getTime()
+
+    expect(publishedAt).toBeGreaterThanOrEqual(beforeSave)
+    expect(publishedAt).toBeLessThanOrEqual(afterSave)
+  })
+
   it('orders public topics by an administrator supplied publish time', () => {
     const newer = saveTopic(db, {
       title: '较新帖子',

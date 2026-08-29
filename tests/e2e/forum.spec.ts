@@ -256,6 +256,36 @@ test('saving the composer refreshes the background topic without navigation', as
   await expect(page.getByRole('heading', { name: updatedTitle })).toBeVisible()
 })
 
+test('administrator can override a topic publish time in the composer', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
+  await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  await composer.getByText('更多设置').click()
+  const publishTime = composer.getByLabel('发布时间')
+  await expect(publishTime).toHaveValue(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)
+
+  const localPublishTime = '2024-01-02T03:04'
+  await publishTime.fill(localPublishTime)
+  const saveResponse = page.waitForResponse(response =>
+    response.request().method() === 'PUT'
+    && /\/api\/studio\/topics\/\d+$/.test(new URL(response.url()).pathname),
+  )
+  await composer.getByRole('button', { name: '保存修改' }).click()
+  const saved = await (await saveResponse).json() as { publishedAt: string }
+  expect(saved.publishedAt).toBe(new Date(localPublishTime).toISOString())
+
+  await expect(composer).toBeHidden()
+  await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
+  const reopenedComposer = page.getByRole('dialog', { name: '编辑帖子' })
+  await reopenedComposer.getByText('更多设置').click()
+  await expect(reopenedComposer.getByLabel('发布时间')).toHaveValue(localPublishTime)
+})
+
 test('unsaved composer changes require confirmation before closing', async ({ page }) => {
   await page.goto('/studio')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')

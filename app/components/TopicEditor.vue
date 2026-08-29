@@ -24,6 +24,15 @@ const emit = defineEmits<{
   'toggle-collapse': []
 }>()
 
+function toDateTimeLocal(value: string | null | undefined) {
+  if (!value) return ''
+  const date = new Date(value)
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
+const initialPublishedAt = toDateTimeLocal(props.topic?.publishedAt)
+const maxPublishTime = toDateTimeLocal(new Date().toISOString())
 const form = reactive({
   title: props.topic?.title || '',
   slug: props.topic?.slug || '',
@@ -33,6 +42,7 @@ const form = reactive({
   contentMarkdown: props.topic?.contentMarkdown || '',
   externalUrl: props.topic?.externalUrl || '',
   isPinned: props.topic?.isPinned || false,
+  publishedAt: initialPublishedAt,
 })
 const initialSnapshot = JSON.stringify(form)
 const busy = ref(false)
@@ -99,9 +109,14 @@ async function save(status: 'draft' | 'published') {
   errorMessage.value = ''
   try {
     const endpoint = props.topic ? `/api/studio/topics/${props.topic.id}` : '/api/studio/topics'
+    const publishedAt = form.publishedAt
+      ? form.publishedAt === initialPublishedAt && props.topic?.publishedAt
+        ? props.topic.publishedAt
+        : new Date(form.publishedAt).toISOString()
+      : null
     const saved = await $fetch<StudioTopic>(endpoint, {
       method: props.topic ? 'PUT' : 'POST',
-      body: { ...form, status },
+      body: { ...form, publishedAt, status },
     })
     emit('dirty-change', false)
     emit('saved', saved)
@@ -175,6 +190,10 @@ onBeforeUnmount(() => clearTimeout(previewTimer))
           <details class="composer-more-fields">
             <summary>更多设置</summary>
             <div class="composer-more-fields__grid">
+              <label class="field">
+                <span>发布时间 <small>留空自动生成</small></span>
+                <input v-model="form.publishedAt" type="datetime-local" :max="maxPublishTime" step="60">
+              </label>
               <label class="field">
                 <span>Slug <small>仅创建时生效</small></span>
                 <input v-model="form.slug" maxlength="160" placeholder="留空自动生成">
