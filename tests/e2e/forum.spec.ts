@@ -472,7 +472,7 @@ test('administrator can override a topic publish time in the composer', async ({
 
   await expect(composer).toBeHidden()
   const savedRow = page.getByRole('row').filter({ hasText: editedTitle })
-  await expect(savedRow.getByText('2024-01-02 03:04', { exact: true })).toBeVisible()
+  await expect(savedRow.getByText('2024.01.02 03:04', { exact: true })).toBeVisible()
   await expect(savedRow.getByText(/^修改 /)).toBeVisible()
 
   const sortSelect = page.getByLabel('排序方式')
