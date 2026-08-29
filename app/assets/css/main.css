@@ -1519,6 +1519,50 @@ select {
   font-size: 12px;
 }
 
+.topic-management-table {
+  table-layout: fixed;
+}
+
+.topic-management-table th:nth-child(1) {
+  width: 42%;
+}
+
+.topic-management-table th:nth-child(2) {
+  width: 14%;
+}
+
+.topic-management-table th:nth-child(3) {
+  width: 10%;
+}
+
+.topic-management-table th:nth-child(4) {
+  width: 8%;
+}
+
+.topic-management-table th:nth-child(5) {
+  width: 12%;
+}
+
+.topic-management-table th:nth-child(6) {
+  width: 14%;
+}
+
+.topic-management-table th:last-child,
+.topic-management-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  box-shadow: -10px 0 14px -14px rgb(15 23 42 / 45%);
+}
+
+.topic-management-table th:last-child {
+  background: var(--surface-subtle);
+}
+
+.topic-management-table td:last-child {
+  background: var(--surface);
+}
+
 .studio-table th,
 .studio-table td {
   padding: 13px 14px;
@@ -1618,6 +1662,22 @@ select {
   color: var(--tertiary);
   background: transparent;
   font-size: 11px;
+}
+
+.row-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.row-action-icon {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .row-actions button {

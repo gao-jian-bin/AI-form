@@ -69,6 +69,52 @@ test('owner can create a draft that stays out of the public topic stream', async
   await expect(page.getByText(title, { exact: true })).toHaveCount(0)
 })
 
+test('studio topic actions remain inside the desktop viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  const tableWrap = page.locator('.studio-table-wrap')
+  const firstEditLink = page.getByRole('link', { name: '编辑' }).first()
+  await expect(firstEditLink).toBeVisible()
+
+  const [wrapBox, editBox] = await Promise.all([
+    tableWrap.boundingBox(),
+    firstEditLink.boundingBox(),
+  ])
+
+  expect(wrapBox).not.toBeNull()
+  expect(editBox).not.toBeNull()
+  expect(editBox!.x + editBox!.width).toBeLessThanOrEqual(wrapBox!.x + wrapBox!.width)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
+test('studio topic actions remain visible on a narrow screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  const tableWrap = page.locator('.studio-table-wrap')
+  const firstEditLink = page.getByRole('link', { name: '编辑' }).first()
+  const firstDeleteButton = page.getByRole('button', { name: '删除' }).first()
+  const [wrapBox, editBox, deleteBox] = await Promise.all([
+    tableWrap.boundingBox(),
+    firstEditLink.boundingBox(),
+    firstDeleteButton.boundingBox(),
+  ])
+
+  expect(wrapBox).not.toBeNull()
+  expect(editBox).not.toBeNull()
+  expect(deleteBox).not.toBeNull()
+  expect(editBox!.x).toBeGreaterThanOrEqual(wrapBox!.x)
+  expect(editBox!.x + editBox!.width).toBeLessThanOrEqual(wrapBox!.x + wrapBox!.width)
+  expect(deleteBox!.x + deleteBox!.width).toBeLessThanOrEqual(wrapBox!.x + wrapBox!.width)
+})
+
 test('owner can manage categories and use them in the topic editor', async ({ page }) => {
   const suffix = Date.now()
   const categorySlug = `ai-image-${suffix}`

@@ -49,7 +49,7 @@ async function signOut() {
     </div>
 
     <div class="studio-table-wrap">
-      <table class="studio-table">
+      <table class="studio-table topic-management-table">
         <thead><tr><th>主题</th><th>板块</th><th>状态</th><th>浏览</th><th>更新</th><th><span class="sr-only">操作</span></th></tr></thead>
         <tbody>
           <tr v-for="topic in visibleTopics" :key="topic.id">
@@ -58,7 +58,16 @@ async function signOut() {
             <td><span :class="['status-chip', `status-${topic.status}`]">{{ topic.status === 'published' ? '已发布' : '草稿' }}</span></td>
             <td>{{ topic.viewCount }}</td>
             <td>{{ new Date(topic.updatedAt).toLocaleDateString('zh-CN') }}</td>
-            <td class="row-actions"><NuxtLink :to="`/studio/topics/${topic.id}/edit`">编辑</NuxtLink><button type="button" @click="removeTopic(topic)">删除</button></td>
+            <td class="row-actions">
+              <NuxtLink :to="`/studio/topics/${topic.id}/edit`" :aria-label="`编辑帖子：${topic.title}`" title="编辑帖子">
+                <svg class="row-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
+                  <path d="m13.5 6.5 4 4" />
+                </svg>
+                <span>编辑</span>
+              </NuxtLink>
+              <button type="button" @click="removeTopic(topic)">删除</button>
+            </td>
           </tr>
         </tbody>
       </table>
