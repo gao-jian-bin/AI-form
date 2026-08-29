@@ -1267,9 +1267,29 @@ html.composer-fullscreen body {
 }
 
 .d-editor-textarea-wrapper {
+  position: relative;
   height: 100%;
   overflow: hidden;
   background: var(--secondary);
+}
+
+.d-editor-textarea-wrapper.is-image-dragging {
+  outline: 3px solid var(--tertiary);
+  outline-offset: -3px;
+}
+
+.image-drop-message {
+  position: absolute;
+  inset: 12px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--tertiary);
+  background: var(--secondary);
+  color: var(--tertiary);
+  font-size: 15px;
+  font-weight: 700;
+  pointer-events: none;
 }
 
 .d-editor-input {
@@ -1376,6 +1396,20 @@ html.composer-fullscreen body {
 .toolbar__button:hover {
   color: var(--primary);
   background: var(--hover);
+}
+
+.toolbar__button svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.composer-image-input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .toolbar__button .is-italic {

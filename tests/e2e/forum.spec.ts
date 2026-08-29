@@ -10,6 +10,73 @@ test('studio tag API rejects public requests', async ({ request }) => {
   expect(response.status()).toBe(401)
 })
 
+test('image upload API is private and serves uploaded image bytes publicly', async ({ request }) => {
+  const publicResponse = await request.post('/api/studio/uploads', {
+    multipart: {
+      file: {
+        name: 'public.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from('not allowed'),
+      },
+    },
+  })
+  expect(publicResponse.status()).toBe(401)
+
+  const login = await request.post('/api/auth/login', {
+    data: { password: 'ai-forum-local-admin' },
+  })
+  expect(login.ok()).toBe(true)
+
+  const imageBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  )
+  const upload = await request.post('/api/studio/uploads', {
+    multipart: {
+      file: {
+        name: '粘贴的截图.png',
+        mimeType: 'image/png',
+        buffer: imageBytes,
+      },
+    },
+  })
+  expect(upload.status()).toBe(201)
+  const result = await upload.json() as {
+    url: string
+    alt: string
+    mimeType: string
+    size: number
+  }
+  expect(result.url).toMatch(/^\/uploads\/\d{4}\/\d{2}\/[0-9a-f-]+\.png$/)
+  expect(result).toMatchObject({
+    alt: '粘贴的截图',
+    mimeType: 'image/png',
+    size: imageBytes.length,
+  })
+
+  const storedImage = await request.get(result.url)
+  expect(storedImage.ok()).toBe(true)
+  expect(storedImage.headers()['content-type']).toContain('image/png')
+  expect(await storedImage.body()).toEqual(imageBytes)
+})
+
+test('image upload API rejects files whose bytes are not an allowed image', async ({ request }) => {
+  await request.post('/api/auth/login', {
+    data: { password: 'ai-forum-local-admin' },
+  })
+
+  const response = await request.post('/api/studio/uploads', {
+    multipart: {
+      file: {
+        name: '伪装图片.png',
+        mimeType: 'image/png',
+        buffer: Buffer.from('<svg><script>alert(1)</script></svg>'),
+      },
+    },
+  })
+  expect(response.status()).toBe(415)
+})
+
 test('public visitors can browse topics without account controls', async ({ page }) => {
   await page.goto('/')
 
@@ -162,7 +229,8 @@ test('composer renders quotes and keeps long editor panes independently scrollab
   await page.goto('/studio')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+  const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
+  await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
 
   const composer = page.getByRole('dialog', { name: '编辑帖子' })
   const editor = composer.getByLabel('正文 · Markdown')
@@ -180,6 +248,45 @@ test('composer renders quotes and keeps long editor panes independently scrollab
   )).toBe(true)
   await expect(editor).toHaveCSS('overflow-y', 'scroll')
   await expect(editor).toHaveCSS('scrollbar-gutter', 'stable')
+})
+
+test('composer uploads pasted images and inserts their Markdown into the post', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
+  await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
+
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  const editor = composer.getByLabel('正文 · Markdown')
+  const saveButton = composer.getByRole('button', { name: '保存修改' })
+  await expect(composer.getByRole('button', { name: '上传图片' })).toBeVisible()
+
+  await page.route('**/api/studio/uploads', async (route) => {
+    await new Promise(resolveDelay => setTimeout(resolveDelay, 300))
+    await route.continue()
+  })
+
+  await editor.focus()
+  await editor.press('Control+End')
+  await editor.evaluate((element, base64) => {
+    const binary = atob(base64)
+    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+    const clipboard = new DataTransfer()
+    clipboard.items.add(new File([bytes], '粘贴截图.png', { type: 'image/png' }))
+    element.dispatchEvent(new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: clipboard,
+    }))
+  }, 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=')
+
+  await expect(composer.getByText('正在上传 1 张图片…')).toBeVisible()
+  await expect(saveButton).toBeDisabled()
+  await expect(editor).toHaveValue(/!\[粘贴截图\]\(\/uploads\/\d{4}\/\d{2}\/[0-9a-f-]+\.png\)/)
+  await expect(composer.locator('.d-editor-preview img')).toHaveAttribute('src', /\/uploads\//)
+  await expect(composer.getByText('图片已插入正文')).toBeVisible()
+  await expect(saveButton).toBeEnabled()
 })
 
 test('composer fills the webpage viewport and exits fullscreen with Escape', async ({ page }) => {

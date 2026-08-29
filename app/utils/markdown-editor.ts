@@ -79,6 +79,15 @@ function replaceBlock(
   )
 }
 
+export function insertMarkdownBlock(
+  value: string,
+  start: number,
+  end: number,
+  block: string,
+): MarkdownEditResult {
+  return replaceBlock(value, start, end, block, block.length, 0)
+}
+
 function wrapSelection(
   value: string,
   start: number,

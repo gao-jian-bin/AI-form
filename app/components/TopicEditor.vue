@@ -2,7 +2,29 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
 import { clampComposerHeight } from '~/utils/composer-layout'
-import { applyMarkdownAction, COMPOSER_TOOLS, type MarkdownAction } from '~/utils/markdown-editor'
+import {
+  applyMarkdownAction,
+  COMPOSER_TOOLS,
+  insertMarkdownBlock,
+  type MarkdownAction,
+} from '~/utils/markdown-editor'
+
+const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif'
+const ALLOWED_IMAGE_TYPES = new Set(IMAGE_ACCEPT.split(','))
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
+const MAX_IMAGES_PER_BATCH = 10
+
+type UploadedImage = {
+  url: string
+  alt: string
+  mimeType: string
+  size: number
+}
+
+type PendingImageUpload = {
+  file: File
+  marker: string
+}
 
 const props = withDefaults(defineProps<{
   topic?: StudioTopic | null
@@ -51,17 +73,27 @@ const errorMessage = ref('')
 const previewHtml = ref('')
 const mobilePane = ref<'editor' | 'preview'>('editor')
 const textarea = ref<HTMLTextAreaElement | null>(null)
+const imageInput = ref<HTMLInputElement | null>(null)
 const composerRoot = ref<HTMLFormElement | null>(null)
 const fullscreen = ref(false)
 const composerHeight = ref<number | null>(null)
 const resizing = ref(false)
+const imageDragActive = ref(false)
+const uploadingImages = ref(0)
+const uploadMessage = ref('')
 let resizeStartY = 0
 let resizeStartHeight = 0
 let previewTimer: ReturnType<typeof setTimeout> | undefined
+let uploadSequence = 0
 
 const composerStyle = computed(() => composerHeight.value === null
   ? undefined
   : { '--composer-height': `${composerHeight.value}px` })
+const draftStatus = computed(() => {
+  if (uploadingImages.value > 0) return `正在上传 ${uploadingImages.value} 张图片…`
+  if (busy.value) return '正在保存…'
+  return uploadMessage.value || '可保存为草稿'
+})
 
 watch(form, () => {
   emit('dirty-change', JSON.stringify(form) !== initialSnapshot)
@@ -103,6 +135,144 @@ async function applyTool(action: MarkdownAction) {
   await nextTick()
   input.focus()
   input.setSelectionRange(edit.selectionStart, edit.selectionEnd)
+}
+
+function imageAltFromFilename(filename: string): string {
+  return filename
+    .replace(/\.[^.]+$/, '')
+    .replace(/[\r\n\[\]()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || '图片'
+}
+
+function imageFilesFromTransfer(transfer: DataTransfer | null): File[] {
+  if (!transfer) return []
+  const itemFiles = Array.from(transfer.items || [])
+    .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+    .map(item => item.getAsFile())
+    .filter((file): file is File => Boolean(file))
+  if (itemFiles.length) return itemFiles
+  return Array.from(transfer.files || []).filter(file => file.type.startsWith('image/'))
+}
+
+function validateImageFiles(files: File[]): string | null {
+  if (files.length > MAX_IMAGES_PER_BATCH) return '一次最多上传 10 张图片'
+  for (const file of files) {
+    if (file.type && !ALLOWED_IMAGE_TYPES.has(file.type)) {
+      return `${file.name || '这张图片'}不是支持的 PNG、JPEG、WebP 或 GIF 图片`
+    }
+    if (file.size > MAX_IMAGE_BYTES) return `${file.name || '这张图片'}超过了 10 MB`
+    if (file.size === 0) return `${file.name || '这张图片'}没有内容`
+  }
+  return null
+}
+
+function uploadErrorText(error: any): string {
+  return error?.data?.statusMessage
+    || error?.data?.message
+    || error?.statusMessage
+    || '图片上传失败，请重试'
+}
+
+async function uploadOneImage(job: PendingImageUpload): Promise<boolean> {
+  const body = new FormData()
+  body.append('file', job.file, job.file.name || 'pasted-image.png')
+  try {
+    const uploaded = await $fetch<UploadedImage>('/api/studio/uploads', {
+      method: 'POST',
+      body,
+    })
+    const markdown = `![${uploaded.alt}](${uploaded.url})`
+    form.contentMarkdown = form.contentMarkdown.replace(job.marker, markdown)
+    schedulePreview()
+    return true
+  }
+  catch (error) {
+    form.contentMarkdown = form.contentMarkdown.replace(job.marker, '')
+    errorMessage.value = uploadErrorText(error)
+    schedulePreview()
+    return false
+  }
+}
+
+async function uploadImages(files: File[]) {
+  if (!files.length || uploadingImages.value > 0) return
+  errorMessage.value = ''
+  uploadMessage.value = ''
+  const validationError = validateImageFiles(files)
+  if (validationError) {
+    errorMessage.value = validationError
+    return
+  }
+
+  const input = textarea.value
+  const start = input?.selectionStart ?? form.contentMarkdown.length
+  const end = input?.selectionEnd ?? start
+  const jobs = files.map((file) => {
+    uploadSequence += 1
+    const marker = `[正在上传图片：${imageAltFromFilename(file.name)}…]<!--upload:${Date.now()}-${uploadSequence}-->`
+    return { file, marker }
+  })
+  const edit = insertMarkdownBlock(
+    form.contentMarkdown,
+    start,
+    end,
+    jobs.map(job => job.marker).join('\n\n'),
+  )
+  form.contentMarkdown = edit.value
+  uploadingImages.value = jobs.length
+  schedulePreview()
+  await nextTick()
+  input?.focus()
+  input?.setSelectionRange(edit.selectionStart, edit.selectionEnd)
+
+  const results = await Promise.all(jobs.map(uploadOneImage))
+  uploadingImages.value = 0
+  const successCount = results.filter(Boolean).length
+  if (successCount === jobs.length) {
+    uploadMessage.value = successCount === 1 ? '图片已插入正文' : `${successCount} 张图片已插入正文`
+  }
+  else if (successCount > 0) {
+    uploadMessage.value = `${successCount} 张图片已插入正文`
+  }
+}
+
+function chooseImages() {
+  imageInput.value?.click()
+}
+
+function handleImageSelection(event: Event) {
+  const input = event.currentTarget as HTMLInputElement
+  void uploadImages(Array.from(input.files || []))
+  input.value = ''
+}
+
+function handleImagePaste(event: ClipboardEvent) {
+  const files = imageFilesFromTransfer(event.clipboardData)
+  if (!files.length) return
+  event.preventDefault()
+  void uploadImages(files)
+}
+
+function handleImageDragOver(event: DragEvent) {
+  if (!event.dataTransfer?.types.includes('Files')) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'copy'
+  imageDragActive.value = true
+}
+
+function handleImageDragLeave(event: DragEvent) {
+  const wrapper = event.currentTarget as HTMLElement
+  if (event.relatedTarget instanceof Node && wrapper.contains(event.relatedTarget)) return
+  imageDragActive.value = false
+}
+
+function handleImageDrop(event: DragEvent) {
+  const files = imageFilesFromTransfer(event.dataTransfer)
+  imageDragActive.value = false
+  if (!files.length) return
+  event.preventDefault()
+  void uploadImages(files)
 }
 
 function handleEditorShortcut(event: KeyboardEvent) {
@@ -173,6 +343,7 @@ function handleResizeKeydown(event: KeyboardEvent) {
 }
 
 async function save(status: 'draft' | 'published') {
+  if (uploadingImages.value > 0) return
   busy.value = true
   errorMessage.value = ''
   try {
@@ -316,7 +487,13 @@ onBeforeUnmount(() => {
 
         <section class="d-editor-textarea-column">
           <label class="sr-only" for="composer-editor">正文 · Markdown</label>
-          <div class="d-editor-textarea-wrapper">
+          <div
+            class="d-editor-textarea-wrapper"
+            :class="{ 'is-image-dragging': imageDragActive }"
+            @dragover="handleImageDragOver"
+            @dragleave="handleImageDragLeave"
+            @drop="handleImageDrop"
+          >
             <textarea
               id="composer-editor"
               ref="textarea"
@@ -326,7 +503,9 @@ onBeforeUnmount(() => {
               placeholder="在这里编写帖子内容…"
               @input="schedulePreview"
               @keydown="handleEditorShortcut"
+              @paste="handleImagePaste"
             />
+            <div v-if="imageDragActive" class="image-drop-message">松开即可上传图片</div>
           </div>
         </section>
 
@@ -355,6 +534,27 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="composer-footer__toolbar" role="toolbar" aria-label="Markdown 工具栏">
+          <input
+            ref="imageInput"
+            class="composer-image-input"
+            type="file"
+            :accept="IMAGE_ACCEPT"
+            multiple
+            tabindex="-1"
+            @change="handleImageSelection"
+          >
+          <button
+            class="toolbar__button"
+            type="button"
+            aria-label="上传图片"
+            title="上传图片（也可以直接粘贴或拖入）"
+            :disabled="uploadingImages > 0"
+            @click="chooseImages"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Zm2 12.5h12v-2.4l-3.1-3.1-2.4 2.4-4-4L6 13.4V18Zm9.5-8a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+            </svg>
+          </button>
           <button
             v-for="tool in COMPOSER_TOOLS"
             :key="tool.id"
@@ -369,11 +569,11 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="submit-panel">
-          <span class="draft-status">{{ busy ? '正在保存…' : '可保存为草稿' }}</span>
-          <button class="btn" type="button" :disabled="busy || !categories.length" @click="save('draft')">
+          <span class="draft-status" aria-live="polite">{{ draftStatus }}</span>
+          <button class="btn" type="button" :disabled="busy || uploadingImages > 0 || !categories.length" @click="save('draft')">
             保存草稿
           </button>
-          <button class="btn btn-primary create" type="submit" :disabled="busy || !categories.length" title="Ctrl+Enter">
+          <button class="btn btn-primary create" type="submit" :disabled="busy || uploadingImages > 0 || !categories.length" title="Ctrl+Enter">
             {{ topic?.status === 'published' ? '保存修改' : '发布帖子' }}
           </button>
         </div>

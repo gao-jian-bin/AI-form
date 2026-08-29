@@ -12,6 +12,7 @@ const serverEnvironment = {
   HOST: host,
   PORT: port,
   DATABASE_PATH: '.data/e2e-forum.db',
+  UPLOAD_DIR: '.data/e2e-uploads',
   SEED_DEMO_CONTENT: 'true',
   ADMIN_PASSWORD: 'ai-forum-local-admin',
   E2E_INSECURE_ADMIN_COOKIE: 'true',

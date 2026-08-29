@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyMarkdownAction } from '../app/utils/markdown-editor'
+import { applyMarkdownAction, insertMarkdownBlock } from '../app/utils/markdown-editor'
 
 describe('applyMarkdownAction', () => {
   it('wraps the current selection in bold markers and keeps the inner text selected', () => {
@@ -48,5 +48,23 @@ describe('applyMarkdownAction', () => {
   it('separates fenced code from surrounding paragraph text', () => {
     expect(applyMarkdownAction('前文a\nb后文', 2, 5, 'code').value)
       .toBe('前文\n\n```\na\nb\n```\n\n后文')
+  })
+})
+
+describe('insertMarkdownBlock', () => {
+  it('inserts uploads on a Markdown block boundary and leaves the caret after them', () => {
+    expect(insertMarkdownBlock('正文', 2, 2, '![截图](/uploads/image.png)')).toEqual({
+      value: '正文\n\n![截图](/uploads/image.png)',
+      selectionStart: 29,
+      selectionEnd: 29,
+    })
+  })
+
+  it('replaces a selected range without swallowing the text after it', () => {
+    expect(insertMarkdownBlock('前文占位后文', 2, 4, '[正在上传图片…]')).toEqual({
+      value: '前文\n\n[正在上传图片…]\n\n后文',
+      selectionStart: 13,
+      selectionEnd: 13,
+    })
   })
 })
