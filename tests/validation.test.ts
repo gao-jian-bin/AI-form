@@ -73,6 +73,32 @@ describe('parseTopicPayload', () => {
       excerpt: '自定义摘要',
     }))
   })
+
+  it('keeps an administrator supplied publish time', () => {
+    expect(parseTopicPayload({
+      title: '补录旧帖',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      tags: [],
+      status: 'published',
+      isPinned: false,
+      publishedAt: '2024-01-01T08:00:00.000Z',
+    })).toEqual(expect.objectContaining({
+      publishedAt: '2024-01-01T08:00:00.000Z',
+    }))
+  })
+
+  it('rejects an administrator supplied publish time in the future', () => {
+    expect(() => parseTopicPayload({
+      title: '未来帖子',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      tags: [],
+      status: 'published',
+      isPinned: false,
+      publishedAt: '2999-01-01T00:00:00.000Z',
+    })).toThrow('发布时间不能晚于当前时间')
+  })
 })
 
 describe('parseCategoryPayload', () => {

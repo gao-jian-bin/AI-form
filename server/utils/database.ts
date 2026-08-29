@@ -17,6 +17,7 @@ export interface TopicInput {
   tags: string[]
   isPinned: boolean
   externalUrl: string | null
+  publishedAt?: string | null
 }
 
 export interface ForumCategory {
@@ -476,6 +477,19 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
     : undefined
   if (input.id && !existing) throw new Error('主题不存在')
 
+  let requestedPublishedAt: string | null = null
+  if (input.publishedAt) {
+    const requestedDate = new Date(input.publishedAt)
+    if (Number.isNaN(requestedDate.getTime())) throw new Error('发布时间格式不正确')
+    if (requestedDate.getTime() > new Date(timestamp).getTime()) {
+      throw new Error('发布时间不能晚于当前时间')
+    }
+    requestedPublishedAt = requestedDate.toISOString()
+  }
+  const nextPublishedAt = input.status === 'published'
+    ? requestedPublishedAt || existing?.published_at || timestamp
+    : existing?.published_at || null
+
   const save = db.transaction(() => {
     let topicId: number
     if (existing) {
@@ -483,8 +497,7 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
         UPDATE topics SET
           title = ?, excerpt = ?, content_markdown = ?, category_id = ?, status = ?,
           is_pinned = ?, external_url = ?,
-          published_at = CASE WHEN ? = 'published' THEN COALESCE(published_at, ?) ELSE published_at END,
-          updated_at = ?
+          published_at = ?, updated_at = ?
         WHERE id = ?
       `).run(
         title,
@@ -494,8 +507,7 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
         input.status,
         input.isPinned ? 1 : 0,
         externalUrl,
-        input.status,
-        timestamp,
+        nextPublishedAt,
         timestamp,
         existing.id,
       )
@@ -515,7 +527,7 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
         input.status,
         input.isPinned ? 1 : 0,
         externalUrl,
-        input.status === 'published' ? timestamp : null,
+        nextPublishedAt,
         timestamp,
         timestamp,
       )

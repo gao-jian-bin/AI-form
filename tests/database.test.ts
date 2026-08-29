@@ -219,6 +219,59 @@ describe('forum database', () => {
     expect(updated.slug).toBe(created.slug)
   })
 
+  it('stores an administrator supplied publish time', () => {
+    const topic = saveTopic(db, {
+      title: '补录旧帖',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: [],
+      isPinned: false,
+      externalUrl: null,
+      publishedAt: '2024-01-01T08:00:00.000Z',
+    })
+
+    expect(topic.publishedAt).toBe('2024-01-01T08:00:00.000Z')
+  })
+
+  it('orders public topics by an administrator supplied publish time', () => {
+    const newer = saveTopic(db, {
+      title: '较新帖子',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: [],
+      isPinned: false,
+      externalUrl: null,
+      publishedAt: '2024-02-01T08:00:00.000Z',
+    })
+    const older = saveTopic(db, {
+      title: '较早帖子',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: [],
+      isPinned: false,
+      externalUrl: null,
+      publishedAt: '2024-01-01T08:00:00.000Z',
+    })
+
+    expect(listPublicTopics(db, {}).map(topic => topic.id)).toEqual([newer.id, older.id])
+  })
+
+  it('rejects an administrator supplied publish time in the future', () => {
+    expect(() => saveTopic(db, {
+      title: '未来帖子',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: [],
+      isPinned: false,
+      externalUrl: null,
+      publishedAt: '2999-01-01T00:00:00.000Z',
+    })).toThrow('发布时间不能晚于当前时间')
+  })
+
   it('counts one view per visitor and topic within a rolling day', () => {
     const topic = saveTopic(db, {
       title: '浏览量测试',

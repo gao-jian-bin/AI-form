@@ -15,6 +15,8 @@ const rawTopicSchema = z.object({
   status: z.enum(['draft', 'published']),
   isPinned: z.boolean().default(false),
   externalUrl: z.string().nullish(),
+  publishedAt: z.string().datetime({ offset: true }).nullish()
+    .refine(value => !value || new Date(value).getTime() <= Date.now(), '发布时间不能晚于当前时间'),
 })
 
 type ParsedTopicPayload = Omit<TopicInput, 'id'>
@@ -43,6 +45,7 @@ export function parseTopicPayload(value: unknown): ParsedTopicPayload {
   }
   if (parsed.slug) result.slug = parsed.slug
   if (parsed.excerpt) result.excerpt = parsed.excerpt
+  if (parsed.publishedAt) result.publishedAt = parsed.publishedAt
   return result
 }
 
