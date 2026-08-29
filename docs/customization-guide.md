@@ -92,15 +92,44 @@ server/utils/database.ts → listPublicTags()
 
 它读取所有已发布帖子的标签，因此进入单个标签页后，其他标签仍然存在。当前标签的高亮由 `activeTag` 控制。
 
-## 5. 修改 Composer 编辑器
-
-编辑器结构：
+Composer 中的标签选择器是另一套管理员组件：
 
 ```text
-app/components/TopicEditor.vue
+app/components/TagChooser.vue
+server/api/studio/tags/index.get.ts
+server/utils/database.ts → listStudioTags()
 ```
 
-这里控制：
+它会罗列已发布和草稿中出现过的全部标签，并允许搜索或创建新标签。最大标签数在 `TopicEditor.vue` 的 `:max="8"` 修改。
+
+## 5. 修改 Composer 编辑器
+
+Composer 是挂在全站根组件上的，不是单独跳转的编辑页面：
+
+```text
+app/app.vue                              挂载全局 Host
+app/components/AdminComposerHost.vue    加载数据、关闭确认、路由离开保护
+app/composables/useAdminComposer.ts      打开/收起/保存后的刷新状态
+app/components/TopicEditor.vue           实际表单和 Markdown 编辑器
+app/components/TagChooser.vue            标签选择器
+```
+
+要在新的按钮上打开帖子编辑器，使用：
+
+```ts
+const { openEdit, openNew } = useAdminComposer()
+
+openEdit(topicId) // 编辑已有帖子
+openNew()         // 创建帖子
+```
+
+公开帖子页的小铅笔入口在：
+
+```text
+app/pages/t/[slug]/[id].vue
+```
+
+`TopicEditor.vue` 控制：
 
 - 标题、动态分类、标签和外部网站地址
 - “更多设置”中的 Slug、摘要和置顶
@@ -123,9 +152,12 @@ app/assets/css/main.css
 下面的 `.discourse-composer` 控制宽度和高度：
 
 ```css
-width: min(1160px, calc(100% - 36px));
-height: min(720px, calc(100dvh - 86px));
+right: max(18px, calc((100vw - 1240px) / 2));
+left: max(18px, calc((100vw - 1240px) / 2));
+height: min(66vh, 680px);
 ```
+
+手机规则在同一文件的 `@media (max-width: 700px)` 中，当前高度上限是 `78dvh`。不要把 `position: fixed` 改掉，否则编辑器就不再停靠在浏览器底部。
 
 ## 6. 修改 Markdown 工具栏
 

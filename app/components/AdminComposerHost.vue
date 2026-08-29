@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
 
 const { request, collapsed, close, toggleCollapsed, markSaved } = useAdminComposer()
+const router = useRouter()
 const categories = ref<ForumCategory[]>([])
 const knownTags = ref<ForumTag[]>([])
 const topic = ref<StudioTopic | null>(null)
@@ -10,6 +11,7 @@ const loading = ref(false)
 const loadError = ref('')
 const tagLoadError = ref(false)
 const dirty = ref(false)
+let removeNavigationGuard: (() => void) | undefined
 
 watch(request, async (next) => {
   if (!next) return
@@ -38,6 +40,7 @@ watch(request, async (next) => {
 }, { immediate: true })
 
 function requestClose() {
+  if (dirty.value && !window.confirm('有尚未保存的修改，确定关闭吗？')) return
   dirty.value = false
   close()
 }
@@ -47,6 +50,28 @@ function handleSaved() {
   markSaved()
   close()
 }
+
+function handleBeforeUnload(event: BeforeUnloadEvent) {
+  if (!request.value || !dirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => {
+  removeNavigationGuard = router.beforeEach(() => {
+    if (!request.value || !dirty.value) return true
+    if (!window.confirm('有尚未保存的修改，确定离开当前页面吗？')) return false
+    dirty.value = false
+    close()
+    return true
+  })
+  window.addEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  removeNavigationGuard?.()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
 </script>
 
 <template>

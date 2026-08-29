@@ -157,6 +157,33 @@ test('studio edit opens a docked composer without leaving the topic list', async
   await expect(page.locator('.composer-page-backdrop')).toHaveCount(0)
 })
 
+test('mobile composer keeps editing, preview and save controls usable', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
+  await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  await expect(composer).toBeVisible()
+  await expect(composer.getByRole('tab', { name: '编辑' })).toHaveAttribute('aria-selected', 'true')
+  await expect(composer.getByRole('button', { name: '保存修改' })).toBeVisible()
+
+  await composer.getByRole('tab', { name: '预览' }).click()
+  await expect(composer.getByRole('tab', { name: '预览' })).toHaveAttribute('aria-selected', 'true')
+  await expect(composer.locator('.d-editor-preview-wrapper')).toBeVisible()
+  await composer.getByRole('tab', { name: '编辑' }).click()
+  await expect(composer.getByLabel('正文 · Markdown')).toBeVisible()
+
+  const composerBox = await page.locator('#reply-control').boundingBox()
+  expect(composerBox).not.toBeNull()
+  expect(composerBox!.height).toBeLessThanOrEqual(Math.ceil(844 * 0.78))
+  expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(844)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+})
+
 test('administrator edits a public topic from its Discourse pencil action', async ({ page }) => {
   await page.goto('/studio/sign-in')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
@@ -193,6 +220,115 @@ test('legacy compatible composer routes open the global composer', async ({ page
   await page.goto('/studio/topics/new')
   await expect(page).toHaveURL(/\/studio$/)
   await expect(page.getByRole('dialog', { name: '创建新帖子' })).toBeVisible()
+})
+
+test('saving the composer refreshes the background topic without navigation', async ({ page }) => {
+  const title = `Composer 刷新 ${Date.now()}`
+  const updatedTitle = `${title}（已更新）`
+  await page.goto('/studio/sign-in')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  const response = await page.request.post('/api/studio/topics', {
+    data: {
+      title,
+      categorySlug: 'chatgpt',
+      contentMarkdown: '用于验证 Composer 保存后的背景刷新。',
+      tags: ['Prompt'],
+      status: 'published',
+      isPinned: false,
+      externalUrl: null,
+    },
+  })
+  expect(response.ok()).toBe(true)
+  const created = await response.json() as { id: number; category: { slug: string } }
+  await page.goto(`/t/${created.category.slug}/${created.id}`)
+  const topicUrl = page.url()
+
+  await page.getByRole('button', { name: '编辑帖子' }).click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  await composer.getByRole('textbox', { name: '标题', exact: true }).fill(updatedTitle)
+  await composer.getByRole('button', { name: '保存修改' }).click()
+
+  await expect(composer).toBeHidden()
+  await expect(page).toHaveURL(topicUrl)
+  await expect(page.getByRole('heading', { name: updatedTitle })).toBeVisible()
+})
+
+test('unsaved composer changes require confirmation before closing', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  const titleInput = composer.getByRole('textbox', { name: '标题', exact: true })
+  await expect(titleInput).toBeVisible()
+  const originalTitle = await titleInput.inputValue()
+  await titleInput.fill(`${originalTitle} - 尚未保存`)
+
+  page.once('dialog', dialog => dialog.dismiss())
+  await composer.getByRole('button', { name: '关闭编辑器' }).click()
+  await expect(composer).toBeVisible()
+  await expect(titleInput).toHaveValue(`${originalTitle} - 尚未保存`)
+
+  page.once('dialog', dialog => dialog.accept())
+  await composer.getByRole('button', { name: '关闭编辑器' }).click()
+  await expect(composer).toBeHidden()
+})
+
+test('failed composer save keeps the editor and entered content', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  const titleInput = composer.getByRole('textbox', { name: '标题', exact: true })
+  const changedTitle = `保存失败仍保留 ${Date.now()}`
+  await titleInput.fill(changedTitle)
+  await page.route('**/api/studio/topics/*', async (route) => {
+    if (route.request().method() === 'PUT') {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ statusMessage: '故意制造的保存失败' }),
+      })
+      return
+    }
+    await route.continue()
+  })
+
+  await composer.getByRole('button', { name: /保存修改|发布帖子/ }).click()
+
+  await expect(composer.getByRole('alert')).toContainText('故意制造的保存失败')
+  await expect(composer).toBeVisible()
+  await expect(titleInput).toHaveValue(changedTitle)
+})
+
+test('unsaved composer changes require confirmation before route navigation', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  const titleInput = composer.getByRole('textbox', { name: '标题', exact: true })
+  await titleInput.fill(`${await titleInput.inputValue()} - 尚未保存`)
+
+  page.once('dialog', dialog => dialog.dismiss())
+  await page.getByRole('link', { name: /查看网站/ }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+  await expect(composer).toBeVisible()
+
+  page.once('dialog', dialog => dialog.accept())
+  await page.getByRole('link', { name: /查看网站/ }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(composer).toBeHidden()
 })
 
 test('owner can manage categories and use them in the topic editor', async ({ page }) => {
