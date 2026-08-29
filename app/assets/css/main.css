@@ -995,7 +995,7 @@ html.composer-fullscreen body {
   bottom: 0;
   left: max(18px, calc((100vw - 1240px) / 2));
   width: auto;
-  height: min(66vh, 680px);
+  height: var(--composer-height, min(66vh, 680px));
   min-height: 0;
   margin: 0;
   display: flex;
@@ -1032,6 +1032,9 @@ html.composer-fullscreen body {
   flex: none;
   border-radius: 8px 8px 0 0;
   background: var(--primary-very-low);
+  cursor: row-resize;
+  touch-action: none;
+  user-select: none;
 }
 
 .grippie span {
@@ -1039,6 +1042,25 @@ html.composer-fullscreen body {
   height: 3px;
   border-radius: 3px;
   background: var(--primary-low-mid);
+}
+
+.grippie:hover span,
+.grippie:focus-visible span,
+.discourse-composer.resizing .grippie span {
+  background: var(--tertiary);
+}
+
+.grippie:focus-visible {
+  outline: 2px solid var(--tertiary);
+  outline-offset: -2px;
+}
+
+.discourse-composer.collapsed .grippie {
+  cursor: default;
+}
+
+.discourse-composer.resizing {
+  user-select: none;
 }
 
 .reply-to {

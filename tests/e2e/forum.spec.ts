@@ -202,6 +202,33 @@ test('composer fills the webpage viewport and exits fullscreen with Escape', asy
   await expect(page.locator('html')).not.toHaveClass(/composer-fullscreen/)
 })
 
+test('composer grippie resizes the docked editor within viewport bounds', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+
+  const root = page.locator('#reply-control')
+  const grippie = page.getByRole('separator', { name: '调整编辑器高度' })
+  const before = await root.boundingBox()
+  const handle = await grippie.boundingBox()
+  expect(before).not.toBeNull()
+  expect(handle).not.toBeNull()
+
+  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(handle!.x + handle!.width / 2, handle!.y - 120)
+  await page.mouse.up()
+  const afterPointer = await root.boundingBox()
+  expect(afterPointer!.height).toBeGreaterThan(before!.height + 80)
+
+  await grippie.focus()
+  await grippie.press('ArrowDown')
+  const afterKeyboard = await root.boundingBox()
+  expect(afterKeyboard!.height).toBeLessThan(afterPointer!.height)
+})
+
 test('mobile composer keeps editing, preview and save controls usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/studio')

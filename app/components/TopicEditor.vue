@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
+import { clampComposerHeight } from '~/utils/composer-layout'
 import { applyMarkdownAction, COMPOSER_TOOLS, type MarkdownAction } from '~/utils/markdown-editor'
 
 const props = withDefaults(defineProps<{
@@ -50,8 +51,17 @@ const errorMessage = ref('')
 const previewHtml = ref('')
 const mobilePane = ref<'editor' | 'preview'>('editor')
 const textarea = ref<HTMLTextAreaElement | null>(null)
+const composerRoot = ref<HTMLFormElement | null>(null)
 const fullscreen = ref(false)
+const composerHeight = ref<number | null>(null)
+const resizing = ref(false)
+let resizeStartY = 0
+let resizeStartHeight = 0
 let previewTimer: ReturnType<typeof setTimeout> | undefined
+
+const composerStyle = computed(() => composerHeight.value === null
+  ? undefined
+  : { '--composer-height': `${composerHeight.value}px` })
 
 watch(form, () => {
   emit('dirty-change', JSON.stringify(form) !== initialSnapshot)
@@ -129,6 +139,39 @@ function handleWindowKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape' && fullscreen.value) setFullscreen(false)
 }
 
+function setComposerHeight(height: number) {
+  composerHeight.value = clampComposerHeight(height, window.innerHeight)
+}
+
+function startResize(event: PointerEvent) {
+  if (props.collapsed || fullscreen.value || !composerRoot.value) return
+  event.preventDefault()
+  resizing.value = true
+  resizeStartY = event.clientY
+  resizeStartHeight = composerRoot.value.getBoundingClientRect().height
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function continueResize(event: PointerEvent) {
+  if (!resizing.value) return
+  setComposerHeight(resizeStartHeight + resizeStartY - event.clientY)
+}
+
+function stopResize(event: PointerEvent) {
+  if (!resizing.value) return
+  resizing.value = false
+  const handle = event.currentTarget as HTMLElement
+  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId)
+}
+
+function handleResizeKeydown(event: KeyboardEvent) {
+  if (!composerRoot.value || fullscreen.value || props.collapsed) return
+  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+  event.preventDefault()
+  const change = event.key === 'ArrowUp' ? 32 : -32
+  setComposerHeight(composerRoot.value.getBoundingClientRect().height + change)
+}
+
 async function save(status: 'draft' | 'published') {
   busy.value = true
   errorMessage.value = ''
@@ -167,8 +210,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <form id="reply-control" class="discourse-composer open" :class="{ collapsed, fullscreen }" @submit.prevent="save('published')">
-    <div class="grippie" aria-hidden="true"><span /></div>
+  <form
+    id="reply-control"
+    ref="composerRoot"
+    class="discourse-composer open"
+    :class="{ collapsed, fullscreen, resizing }"
+    :style="composerStyle"
+    @submit.prevent="save('published')"
+  >
+    <div
+      class="grippie"
+      role="separator"
+      aria-label="调整编辑器高度"
+      aria-orientation="horizontal"
+      :aria-disabled="collapsed || fullscreen"
+      :tabindex="collapsed || fullscreen ? -1 : 0"
+      @pointerdown="startResize"
+      @pointermove="continueResize"
+      @pointerup="stopResize"
+      @pointercancel="stopResize"
+      @keydown="handleResizeKeydown"
+    ><span /></div>
     <div class="reply-area" role="dialog" :aria-label="topic ? '编辑帖子' : '创建新帖子'">
       <header class="reply-to" @click.self="collapsed && requestToggleCollapse()">
         <div class="composer-action-title">
