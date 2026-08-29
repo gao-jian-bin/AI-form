@@ -50,11 +50,16 @@ const errorMessage = ref('')
 const previewHtml = ref('')
 const mobilePane = ref<'editor' | 'preview'>('editor')
 const textarea = ref<HTMLTextAreaElement | null>(null)
+const fullscreen = ref(false)
 let previewTimer: ReturnType<typeof setTimeout> | undefined
 
 watch(form, () => {
   emit('dirty-change', JSON.stringify(form) !== initialSnapshot)
 }, { deep: true })
+
+watch(() => props.collapsed, (collapsed) => {
+  if (collapsed) setFullscreen(false)
+})
 
 async function updatePreview() {
   try {
@@ -104,6 +109,26 @@ function handleEditorShortcut(event: KeyboardEvent) {
   }
 }
 
+function setFullscreen(value: boolean) {
+  fullscreen.value = value
+  if (import.meta.client) {
+    document.documentElement.classList.toggle('composer-fullscreen', value)
+  }
+}
+
+function toggleFullscreen() {
+  setFullscreen(!fullscreen.value)
+}
+
+function requestToggleCollapse() {
+  setFullscreen(false)
+  emit('toggle-collapse')
+}
+
+function handleWindowKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && fullscreen.value) setFullscreen(false)
+}
+
 async function save(status: 'draft' | 'published') {
   busy.value = true
   errorMessage.value = ''
@@ -129,26 +154,43 @@ async function save(status: 'draft' | 'published') {
   }
 }
 
-onMounted(updatePreview)
-onBeforeUnmount(() => clearTimeout(previewTimer))
+onMounted(() => {
+  updatePreview()
+  window.addEventListener('keydown', handleWindowKeydown)
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(previewTimer)
+  window.removeEventListener('keydown', handleWindowKeydown)
+  document.documentElement.classList.remove('composer-fullscreen')
+})
 </script>
 
 <template>
-  <form id="reply-control" class="discourse-composer open" :class="{ collapsed }" @submit.prevent="save('published')">
+  <form id="reply-control" class="discourse-composer open" :class="{ collapsed, fullscreen }" @submit.prevent="save('published')">
     <div class="grippie" aria-hidden="true"><span /></div>
     <div class="reply-area" role="dialog" :aria-label="topic ? '编辑帖子' : '创建新帖子'">
-      <header class="reply-to" @click.self="collapsed && emit('toggle-collapse')">
+      <header class="reply-to" @click.self="collapsed && requestToggleCollapse()">
         <div class="composer-action-title">
           <strong>{{ topic ? '编辑帖子' : '创建新帖子' }}</strong>
           <span>{{ topic ? `#${topic.id}` : '新帖子' }}</span>
         </div>
         <div class="composer-controls">
           <button
+            v-if="!collapsed"
+            class="composer-control composer-fullscreen-toggle"
+            type="button"
+            :title="fullscreen ? '退出全屏（Esc）' : '全屏编辑'"
+            :aria-label="fullscreen ? '退出全屏' : '全屏编辑'"
+            :aria-pressed="fullscreen"
+            @click="toggleFullscreen"
+          >⛶</button>
+          <button
             class="composer-control"
             type="button"
             :title="collapsed ? '展开编辑器' : '收起编辑器'"
             :aria-label="collapsed ? '展开编辑器' : '收起编辑器'"
-            @click="emit('toggle-collapse')"
+            @click="requestToggleCollapse"
           >{{ collapsed ? '□' : '—' }}</button>
           <button class="composer-control" type="button" title="关闭编辑器" aria-label="关闭编辑器" @click="emit('request-close')">×</button>
         </div>

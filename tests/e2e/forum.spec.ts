@@ -157,6 +157,51 @@ test('studio edit opens a docked composer without leaving the topic list', async
   await expect(page.locator('.composer-page-backdrop')).toHaveCount(0)
 })
 
+test('composer renders quotes and keeps long editor panes independently scrollable', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  const editor = composer.getByLabel('正文 · Markdown')
+  await editor.fill('正文')
+  await editor.press('End')
+  await composer.getByRole('button', { name: '引用' }).click()
+  await expect(editor).toHaveValue('正文\n\n> 引用内容')
+  await expect(composer.locator('.d-editor-preview blockquote')).toContainText('引用内容')
+
+  const longText = Array.from({ length: 220 }, (_, index) => `第 ${index + 1} 行滚动内容`).join('\n\n')
+  await editor.fill(longText)
+  await expect.poll(() => editor.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+  await expect.poll(() => composer.locator('.d-editor-preview-wrapper').evaluate(
+    element => element.scrollHeight > element.clientHeight,
+  )).toBe(true)
+  await expect(editor).toHaveCSS('overflow-y', 'scroll')
+  await expect(editor).toHaveCSS('scrollbar-gutter', 'stable')
+})
+
+test('composer fills the webpage viewport and exits fullscreen with Escape', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+
+  const root = page.locator('#reply-control')
+  await page.getByRole('button', { name: '全屏编辑' }).click()
+  await expect(root).toHaveClass(/fullscreen/)
+  await expect(page.locator('html')).toHaveClass(/composer-fullscreen/)
+  const box = await root.boundingBox()
+  expect(box).toMatchObject({ x: 0, y: 0, width: 1280, height: 900 })
+  await expect(page.locator('html')).toHaveCSS('overflow', 'hidden')
+
+  await page.keyboard.press('Escape')
+  await expect(root).not.toHaveClass(/fullscreen/)
+  await expect(page.locator('html')).not.toHaveClass(/composer-fullscreen/)
+})
+
 test('mobile composer keeps editing, preview and save controls usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/studio')

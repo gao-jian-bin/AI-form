@@ -983,6 +983,11 @@ select {
 }
 
 /* Discourse-style composer */
+html.composer-fullscreen,
+html.composer-fullscreen body {
+  overflow: hidden;
+}
+
 .discourse-composer {
   position: fixed;
   z-index: 1250;
@@ -1004,6 +1009,19 @@ select {
 
 .discourse-composer.collapsed {
   height: 55px;
+}
+
+.discourse-composer.fullscreen {
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.discourse-composer.fullscreen .grippie {
+  display: none;
 }
 
 .grippie {
@@ -1089,12 +1107,14 @@ select {
   display: flex;
   flex: 1;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .d-editor-container {
   min-height: 0;
   display: grid;
   flex: 1;
+  overflow: hidden;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
@@ -1220,18 +1240,22 @@ select {
 .d-editor-textarea-column {
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   grid-area: editor;
 }
 
 .d-editor-textarea-wrapper {
   height: 100%;
+  overflow: hidden;
   background: var(--secondary);
 }
 
 .d-editor-input {
   width: 100%;
   height: 100%;
-  min-height: 220px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: scroll;
   padding: 1em;
   border: 0;
   color: var(--primary);
@@ -1250,11 +1274,42 @@ select {
 .d-editor-preview-wrapper {
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: scroll;
   grid-area: preview;
   padding: 1em;
   border-left: 1px solid var(--primary-low);
   background: var(--secondary);
+}
+
+.d-editor-input,
+.d-editor-preview-wrapper {
+  overscroll-behavior: contain;
+  scrollbar-color: var(--primary-low-mid) var(--primary-very-low);
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+}
+
+.d-editor-input::-webkit-scrollbar,
+.d-editor-preview-wrapper::-webkit-scrollbar {
+  width: 11px;
+}
+
+.d-editor-input::-webkit-scrollbar-track,
+.d-editor-preview-wrapper::-webkit-scrollbar-track {
+  background: var(--primary-very-low);
+}
+
+.d-editor-input::-webkit-scrollbar-thumb,
+.d-editor-preview-wrapper::-webkit-scrollbar-thumb {
+  border: 3px solid var(--primary-very-low);
+  border-radius: 999px;
+  background: var(--primary-low-mid);
+}
+
+.d-editor-input::-webkit-scrollbar-thumb:hover,
+.d-editor-preview-wrapper::-webkit-scrollbar-thumb:hover {
+  background: var(--primary-medium);
 }
 
 .d-editor-preview {
