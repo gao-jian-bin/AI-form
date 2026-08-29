@@ -5,6 +5,11 @@ test('category admin API rejects public requests', async ({ request }) => {
   expect(response.status()).toBe(401)
 })
 
+test('studio tag API rejects public requests', async ({ request }) => {
+  const response = await request.get('/api/studio/tags')
+  expect(response.status()).toBe(401)
+})
+
 test('public visitors can browse topics without account controls', async ({ page }) => {
   await page.goto('/')
 

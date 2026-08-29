@@ -383,6 +383,23 @@ export function listPublicTags(db: Database.Database): ForumTag[] {
     b.topicCount - a.topicCount || a.name.localeCompare(b.name, 'zh-CN'))
 }
 
+export function listStudioTags(db: Database.Database): ForumTag[] {
+  const tags = db.prepare(`
+    SELECT tags.id, tags.name, tags.slug, COUNT(DISTINCT topics.id) AS topic_count
+    FROM tags
+    JOIN topic_tags ON topic_tags.tag_id = tags.id
+    JOIN topics ON topics.id = topic_tags.topic_id
+    GROUP BY tags.id
+  `).all().map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    topicCount: row.topic_count,
+  }))
+  return tags.sort((a: ForumTag, b: ForumTag) =>
+    b.topicCount - a.topicCount || a.name.localeCompare(b.name, 'zh-CN'))
+}
+
 export function listPublicTopics(
   db: Database.Database,
   filters: { category?: string; tag?: string; query?: string; limit?: number },

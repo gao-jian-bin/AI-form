@@ -11,6 +11,7 @@ import {
   listPublicTags,
   listPublicTopics,
   listStudioCategories,
+  listStudioTags,
   migrateForumDatabase,
   recordTopicView,
   saveTopic,
@@ -300,5 +301,34 @@ describe('forum database', () => {
       expect.objectContaining({ name: '工作流', topicCount: 1 }),
       expect.objectContaining({ name: '图片处理', topicCount: 1 }),
     ])
+  })
+
+  it('lists tags used by published topics and drafts for administrators', () => {
+    saveTopic(db, {
+      title: '公开标签帖',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      tags: ['Prompt', '共用标签'],
+      isPinned: false,
+      externalUrl: null,
+    })
+    saveTopic(db, {
+      title: '草稿标签帖',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'draft',
+      tags: ['草稿标签', '共用标签'],
+      isPinned: false,
+      externalUrl: null,
+    })
+    db.prepare("INSERT INTO tags (name, slug) VALUES ('孤立标签', 'orphan')").run()
+
+    expect(listStudioTags(db)).toEqual([
+      expect.objectContaining({ name: '共用标签', topicCount: 2 }),
+      expect.objectContaining({ name: '草稿标签', topicCount: 1 }),
+      expect.objectContaining({ name: 'Prompt', topicCount: 1 }),
+    ])
+    expect(listStudioTags(db).some(tag => tag.name === '孤立标签')).toBe(false)
   })
 })
