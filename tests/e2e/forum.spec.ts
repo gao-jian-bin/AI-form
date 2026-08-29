@@ -121,16 +121,40 @@ test('studio topic actions remain visible on a narrow screen', async ({ page }) 
 })
 
 test('studio edit opens a docked composer without leaving the topic list', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/studio')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
   await expect(page).toHaveURL(/\/studio$/)
   const urlBefore = page.url()
 
-  await page.getByRole('button', { name: /编辑帖子/ }).first().click()
+  const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
+  await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
 
-  await expect(page.getByRole('dialog', { name: '编辑帖子' })).toBeVisible()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  await expect(composer).toBeVisible()
   await expect(page).toHaveURL(urlBefore)
+  await expect(composer.getByRole('textbox', { name: '标题', exact: true })).toHaveValue(/.+/)
+  await composer.getByRole('button', { name: '选择标签' }).click()
+  await expect(composer.locator('[data-tag-option="Base64"]')).toBeVisible()
+  await expect(composer.getByRole('toolbar', { name: 'Markdown 工具栏' })).toBeVisible()
+  await expect(composer.getByRole('button', { name: '保存修改' })).toBeVisible()
+  await composer.getByRole('button', { name: '收起编辑器' }).click()
+  await expect(composer.getByRole('textbox', { name: '标题', exact: true })).toBeHidden()
+  await composer.getByRole('button', { name: '展开编辑器' }).click()
+  await expect(composer.getByRole('textbox', { name: '标题', exact: true })).toBeVisible()
+  const [composerBox, editorBox, previewBox] = await Promise.all([
+    page.locator('#reply-control').boundingBox(),
+    composer.locator('.d-editor-textarea-column').boundingBox(),
+    composer.locator('.d-editor-preview-wrapper').boundingBox(),
+  ])
+  expect(composerBox).not.toBeNull()
+  expect(editorBox).not.toBeNull()
+  expect(previewBox).not.toBeNull()
+  expect(composerBox!.y + composerBox!.height).toBeLessThanOrEqual(900)
+  expect(composerBox!.height).toBeLessThanOrEqual(Math.ceil(900 * 0.66))
+  expect(editorBox!.x + editorBox!.width).toBeLessThanOrEqual(previewBox!.x + 1)
+  await expect(page.locator('.composer-page-backdrop')).toHaveCount(0)
 })
 
 test('owner can manage categories and use them in the topic editor', async ({ page }) => {

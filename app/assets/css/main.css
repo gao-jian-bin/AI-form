@@ -972,30 +972,27 @@ select {
 }
 
 /* Discourse-style composer */
-.composer-page-backdrop {
-  position: fixed;
-  z-index: 1240;
-  inset: 64px 0 0;
-  background: rgb(0 0 0 / 0.12);
-}
-
 .discourse-composer {
   position: fixed;
   z-index: 1250;
-  right: 18px;
+  right: max(18px, calc((100vw - 1240px) / 2));
   bottom: 0;
-  left: 18px;
-  width: min(1160px, calc(100% - 36px));
-  height: min(720px, calc(100dvh - 86px));
-  min-height: 480px;
-  margin: 0 auto;
+  left: max(18px, calc((100vw - 1240px) / 2));
+  width: auto;
+  height: min(66vh, 680px);
+  min-height: 0;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--content-border-color);
+  border: 1px solid var(--primary-low);
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
   background: var(--secondary);
-  box-shadow: 0 -5px 30px rgb(0 0 0 / 0.2);
+  box-shadow: 0 -8px 28px rgb(0 0 0 / 0.18);
+}
+
+.discourse-composer.collapsed {
+  height: 55px;
 }
 
 .grippie {
@@ -1664,7 +1661,8 @@ select {
   font-size: 11px;
 }
 
-.row-actions a {
+.row-actions a,
+.row-actions > button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1680,7 +1678,7 @@ select {
   stroke-linejoin: round;
 }
 
-.row-actions button {
+.row-actions button:last-child {
   color: var(--danger);
 }
 
@@ -2206,19 +2204,19 @@ select {
 }
 
 @media (max-width: 700px) {
-  .composer-page-backdrop {
-    inset: 64px 0 0;
-  }
-
   .discourse-composer {
-    right: 0;
-    left: 0;
+    inset-inline: 0;
     width: 100%;
-    height: calc(100dvh - 64px);
+    height: min(78dvh, 680px);
+    max-height: 78dvh;
     min-height: 0;
     border-right: 0;
     border-left: 0;
-    border-radius: 0;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .discourse-composer.collapsed {
+    height: 55px;
   }
 
   .grippie {
@@ -2243,7 +2241,7 @@ select {
     width: 38%;
   }
 
-  .tags-input {
+  .title-and-category > .tag-chooser {
     width: 62%;
     flex: none;
     border-right: 0;
@@ -2317,6 +2315,9 @@ select {
   .composer-footer__toolbar {
     width: 100%;
     flex: none;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
     padding: 0.25em 0.5em;
     border-bottom: 1px solid var(--primary-low);
   }

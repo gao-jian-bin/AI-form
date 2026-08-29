@@ -113,3 +113,85 @@ function handleKeydown(event: KeyboardEvent) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.tag-chooser {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.tag-chooser__selected {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 5px 8px;
+  border-right: 1px solid var(--primary-low);
+}
+
+.tag-chooser__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  background: var(--primary-very-low);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tag-chooser__chip button,
+.tag-chooser__selected > button,
+.tag-chooser__menu button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tag-chooser__selected > button {
+  color: var(--primary-medium);
+  white-space: nowrap;
+}
+
+.tag-chooser__menu {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--primary-low);
+  background: var(--secondary);
+  box-shadow: 0 8px 18px rgb(0 0 0 / 0.16);
+}
+
+.tag-chooser__menu input {
+  width: 100%;
+  margin-bottom: 4px;
+}
+
+.tag-chooser__menu button {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+  text-align: left;
+}
+
+.tag-chooser__menu button:hover,
+.tag-chooser__menu button:focus-visible,
+.tag-chooser__menu button.is-active {
+  background: var(--hover);
+}
+
+.tag-chooser__message {
+  margin: 6px 8px;
+  color: var(--primary-medium);
+  font-size: 12px;
+}
+</style>

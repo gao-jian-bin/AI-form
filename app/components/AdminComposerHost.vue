@@ -2,13 +2,14 @@
 import { ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
 
-const { request, collapsed, close, toggleCollapsed } = useAdminComposer()
+const { request, collapsed, close, toggleCollapsed, markSaved } = useAdminComposer()
 const categories = ref<ForumCategory[]>([])
 const knownTags = ref<ForumTag[]>([])
 const topic = ref<StudioTopic | null>(null)
 const loading = ref(false)
 const loadError = ref('')
 const tagLoadError = ref(false)
+const dirty = ref(false)
 
 watch(request, async (next) => {
   if (!next) return
@@ -35,11 +36,35 @@ watch(request, async (next) => {
     loading.value = false
   }
 }, { immediate: true })
+
+function requestClose() {
+  dirty.value = false
+  close()
+}
+
+function handleSaved() {
+  dirty.value = false
+  markSaved()
+  close()
+}
 </script>
 
 <template>
+  <TopicEditor
+    v-if="request && !loading && !loadError"
+    :key="request.key"
+    :topic="topic"
+    :categories="categories"
+    :known-tags="knownTags"
+    :collapsed="collapsed"
+    :tag-load-error="tagLoadError"
+    @dirty-change="dirty = $event"
+    @toggle-collapse="toggleCollapsed"
+    @request-close="requestClose"
+    @saved="handleSaved"
+  />
   <section
-    v-if="request"
+    v-else-if="request"
     id="reply-control"
     class="discourse-composer open"
     :class="{ collapsed }"
@@ -50,13 +75,10 @@ watch(request, async (next) => {
       <strong>{{ request.mode === 'edit' ? '编辑帖子' : '创建新帖子' }}</strong>
       <div class="composer-controls">
         <button type="button" aria-label="收起编辑器" @click="toggleCollapsed">—</button>
-        <button type="button" aria-label="关闭编辑器" @click="close">×</button>
+        <button type="button" aria-label="关闭编辑器" @click="requestClose">×</button>
       </div>
     </header>
     <p v-if="loading" data-composer-loading role="status">正在加载编辑器</p>
     <p v-else-if="loadError" class="form-alert" role="alert">{{ loadError }}</p>
-    <p v-else data-composer-ready role="status">
-      帖子数据已载入，共 {{ categories.length }} 个板块、{{ knownTags.length }} 个已知标签。
-    </p>
   </section>
 </template>

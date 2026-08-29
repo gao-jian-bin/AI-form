@@ -1,27 +1,50 @@
 <script setup lang="ts">
-import { nextTick, onMounted, reactive, ref } from 'vue'
-import type { ForumCategory, StudioTopic } from '~/types/forum'
+import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
 import { applyMarkdownAction, COMPOSER_TOOLS, type MarkdownAction } from '~/utils/markdown-editor'
 
-const props = defineProps<{ topic?: StudioTopic | null }>()
-const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
+const props = withDefaults(defineProps<{
+  topic?: StudioTopic | null
+  categories?: ForumCategory[]
+  knownTags?: ForumTag[]
+  tagLoadError?: boolean
+  collapsed?: boolean
+}>(), {
+  topic: null,
+  categories: () => [],
+  knownTags: () => [],
+  tagLoadError: false,
+  collapsed: false,
+})
+
+const emit = defineEmits<{
+  saved: [topic: StudioTopic]
+  'dirty-change': [dirty: boolean]
+  'request-close': []
+  'toggle-collapse': []
+}>()
 
 const form = reactive({
   title: props.topic?.title || '',
   slug: props.topic?.slug || '',
   excerpt: props.topic?.excerpt || '',
-  categorySlug: props.topic?.category.slug || categories.value[0]?.slug || '',
-  tags: props.topic?.tags.join(', ') || '',
+  categorySlug: props.topic?.category.slug || props.categories[0]?.slug || '',
+  tags: [...(props.topic?.tags || [])],
   contentMarkdown: props.topic?.contentMarkdown || '',
   externalUrl: props.topic?.externalUrl || '',
   isPinned: props.topic?.isPinned || false,
 })
+const initialSnapshot = JSON.stringify(form)
 const busy = ref(false)
 const errorMessage = ref('')
 const previewHtml = ref('')
 const mobilePane = ref<'editor' | 'preview'>('editor')
 const textarea = ref<HTMLTextAreaElement | null>(null)
 let previewTimer: ReturnType<typeof setTimeout> | undefined
+
+watch(form, () => {
+  emit('dirty-change', JSON.stringify(form) !== initialSnapshot)
+}, { deep: true })
 
 async function updatePreview() {
   try {
@@ -30,7 +53,8 @@ async function updatePreview() {
       body: { markdown: form.contentMarkdown },
     })
     previewHtml.value = result.html
-  } catch {
+  }
+  catch {
     previewHtml.value = '<p>预览暂时不可用。</p>'
   }
 }
@@ -63,7 +87,8 @@ function handleEditorShortcut(event: KeyboardEvent) {
   if (action) {
     event.preventDefault()
     applyTool(action)
-  } else if (key === 'enter') {
+  }
+  else if (key === 'enter') {
     event.preventDefault()
     save('published')
   }
@@ -74,48 +99,56 @@ async function save(status: 'draft' | 'published') {
   errorMessage.value = ''
   try {
     const endpoint = props.topic ? `/api/studio/topics/${props.topic.id}` : '/api/studio/topics'
-    await $fetch(endpoint, {
+    const saved = await $fetch<StudioTopic>(endpoint, {
       method: props.topic ? 'PUT' : 'POST',
-      body: {
-        ...form,
-        status,
-        externalUrl: form.externalUrl,
-      },
+      body: { ...form, status },
     })
-    await navigateTo('/studio')
-  } catch (error: any) {
+    emit('dirty-change', false)
+    emit('saved', saved)
+  }
+  catch (error: any) {
     errorMessage.value = error?.data?.statusMessage || error?.statusMessage || '保存失败，请检查输入后重试'
-  } finally {
+  }
+  finally {
     busy.value = false
   }
 }
 
 onMounted(updatePreview)
+onBeforeUnmount(() => clearTimeout(previewTimer))
 </script>
 
 <template>
-  <div class="composer-page-backdrop" aria-hidden="true" />
-  <form id="reply-control" class="discourse-composer" @submit.prevent="save('published')">
+  <form id="reply-control" class="discourse-composer open" :class="{ collapsed }" @submit.prevent="save('published')">
     <div class="grippie" aria-hidden="true"><span /></div>
+    <div class="reply-area" role="dialog" :aria-label="topic ? '编辑帖子' : '创建新帖子'">
+      <header class="reply-to" @click.self="collapsed && emit('toggle-collapse')">
+        <div class="composer-action-title">
+          <strong>{{ topic ? '编辑帖子' : '创建新帖子' }}</strong>
+          <span>{{ topic ? `#${topic.id}` : '新帖子' }}</span>
+        </div>
+        <div class="composer-controls">
+          <button
+            class="composer-control"
+            type="button"
+            :title="collapsed ? '展开编辑器' : '收起编辑器'"
+            :aria-label="collapsed ? '展开编辑器' : '收起编辑器'"
+            @click="emit('toggle-collapse')"
+          >{{ collapsed ? '□' : '—' }}</button>
+          <button class="composer-control" type="button" title="关闭编辑器" aria-label="关闭编辑器" @click="emit('request-close')">×</button>
+        </div>
+      </header>
 
-    <header class="reply-to">
-      <div class="composer-action-title">
-        <strong>{{ topic ? '编辑帖子' : '创建新帖子' }}</strong>
-        <span>{{ topic ? `#${topic.id}` : '新帖子' }}</span>
+      <div v-if="errorMessage" class="form-alert composer-alert" role="alert">{{ errorMessage }}</div>
+      <div v-else-if="!categories.length" class="form-alert composer-alert" role="alert">
+        还没有可用板块，请先前往板块管理创建一个板块。
       </div>
-      <div class="composer-controls">
-        <button class="composer-control" type="button" title="收起编辑器" aria-label="收起编辑器" @click="navigateTo('/studio')">—</button>
-        <NuxtLink to="/studio" class="composer-control" title="关闭编辑器" aria-label="关闭编辑器">×</NuxtLink>
-      </div>
-    </header>
 
-    <div v-if="errorMessage" class="form-alert composer-alert" role="alert">{{ errorMessage }}</div>
-    <div v-else-if="!categories.length" class="form-alert composer-alert" role="alert">
-      还没有可用板块，请先前往 <NuxtLink to="/studio/categories/new">板块管理</NuxtLink> 创建一个板块。
-    </div>
-
-    <div class="reply-area">
-      <div class="d-editor-container" :class="{ 'show-mobile-preview': mobilePane === 'preview' }">
+      <div
+        v-show="!collapsed"
+        class="d-editor-container"
+        :class="{ 'show-mobile-preview': mobilePane === 'preview' }"
+      >
         <section class="composer-fields">
           <label class="title-input" for="reply-title">
             <span class="sr-only">标题</span>
@@ -126,14 +159,12 @@ onMounted(updatePreview)
             <label class="composer-select category-input">
               <span class="sr-only">分类</span>
               <select v-model="form.categorySlug" required>
-                <option v-for="category in categories" :key="category.id" :value="category.slug">{{ category.name }}</option>
+                <option v-for="category in categories" :key="category.id" :value="category.slug">
+                  {{ category.name }}
+                </option>
               </select>
             </label>
-            <label class="composer-inline-input tags-input">
-              <span class="composer-field-icon" aria-hidden="true">#</span>
-              <span class="sr-only">标签</span>
-              <input v-model="form.tags" placeholder="可选标签，用逗号分隔">
-            </label>
+            <TagChooser v-model="form.tags" :options="knownTags" :load-error="tagLoadError" :max="8" />
             <label class="composer-inline-input external-url-input">
               <span class="composer-field-icon" aria-hidden="true">↗</span>
               <span class="sr-only">外部网站地址</span>
@@ -160,7 +191,7 @@ onMounted(updatePreview)
           </details>
         </section>
 
-        <section class="d-editor-textarea-column" :aria-hidden="mobilePane === 'preview'">
+        <section class="d-editor-textarea-column">
           <label class="sr-only" for="composer-editor">正文 · Markdown</label>
           <div class="d-editor-textarea-wrapper">
             <textarea
@@ -176,16 +207,28 @@ onMounted(updatePreview)
           </div>
         </section>
 
-        <section class="d-editor-preview-wrapper" :aria-hidden="mobilePane !== 'preview'">
+        <section class="d-editor-preview-wrapper">
           <div v-if="previewHtml" class="d-editor-preview markdown-body" v-html="previewHtml" />
           <div v-else class="preview-empty">输入正文后，这里会显示安全预览。</div>
         </section>
       </div>
 
-      <footer class="composer-footer">
+      <footer v-show="!collapsed" class="composer-footer">
         <div class="composer-mobile-tabs" role="tablist" aria-label="编辑模式">
-          <button type="button" :class="{ active: mobilePane === 'editor' }" @click="mobilePane = 'editor'">编辑</button>
-          <button type="button" :class="{ active: mobilePane === 'preview' }" @click="mobilePane = 'preview'; updatePreview()">预览</button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="mobilePane === 'editor'"
+            :class="{ active: mobilePane === 'editor' }"
+            @click="mobilePane = 'editor'"
+          >编辑</button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="mobilePane === 'preview'"
+            :class="{ active: mobilePane === 'preview' }"
+            @click="mobilePane = 'preview'; updatePreview()"
+          >预览</button>
         </div>
 
         <div class="composer-footer__toolbar" role="toolbar" aria-label="Markdown 工具栏">
@@ -204,8 +247,12 @@ onMounted(updatePreview)
 
         <div class="submit-panel">
           <span class="draft-status">{{ busy ? '正在保存…' : '可保存为草稿' }}</span>
-          <button class="btn" type="button" :disabled="busy || !categories.length" @click="save('draft')">保存草稿</button>
-          <button class="btn btn-primary create" type="submit" :disabled="busy || !categories.length" title="Ctrl+Enter">{{ topic?.status === 'published' ? '保存修改' : '发布帖子' }}</button>
+          <button class="btn" type="button" :disabled="busy || !categories.length" @click="save('draft')">
+            保存草稿
+          </button>
+          <button class="btn btn-primary create" type="submit" :disabled="busy || !categories.length" title="Ctrl+Enter">
+            {{ topic?.status === 'published' ? '保存修改' : '发布帖子' }}
+          </button>
         </div>
       </footer>
     </div>
