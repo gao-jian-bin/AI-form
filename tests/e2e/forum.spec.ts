@@ -241,6 +241,7 @@ test('studio edit opens a docked composer without leaving the topic list', async
 
 test('composer renders quotes and keeps long editor panes independently scrollable', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await page.goto('/studio')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
@@ -278,6 +279,14 @@ test('composer renders quotes and keeps long editor panes independently scrollab
   }, commandEnd)
   await editor.press('Enter')
   await expect(editor).toHaveValue('```shell\n1. command\n\n```')
+  const preformattedPreview = composer.locator('.d-editor-preview .code-block-wrapper')
+  const copyPreformatted = preformattedPreview.getByRole('button', { name: '复制预格式化文本' })
+  await expect(copyPreformatted).toBeVisible()
+  await expect(preformattedPreview.locator('pre')).toHaveCSS('background-color', 'rgb(248, 248, 248)')
+  await copyPreformatted.click()
+  await expect(copyPreformatted).toHaveText('已复制')
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toContain('1. command')
 
   const longText = Array.from({ length: 220 }, (_, index) => `第 ${index + 1} 行滚动内容`).join('\n\n')
   await editor.fill(longText)

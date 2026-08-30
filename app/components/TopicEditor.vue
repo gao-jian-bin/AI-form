@@ -747,7 +747,7 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="d-editor-preview-wrapper">
-          <div v-if="previewHtml" class="d-editor-preview markdown-body" v-html="previewHtml" />
+          <MarkdownContent v-if="previewHtml" class="d-editor-preview" :html="previewHtml" />
           <div v-else class="preview-empty">输入正文后，这里会显示安全预览。</div>
         </section>
       </div>

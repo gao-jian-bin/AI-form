@@ -36,6 +36,15 @@ describe('validateExternalUrl', () => {
 })
 
 describe('renderSafeMarkdown', () => {
+  it('adds an accessible copy control to fenced preformatted text', () => {
+    const html = renderSafeMarkdown('```shell\necho hello\n```')
+
+    expect(html).toContain('class="code-block-wrapper"')
+    expect(html).toContain('data-copy-code')
+    expect(html).toContain('aria-label="复制预格式化文本"')
+    expect(html).toContain('<code class="language-shell">echo hello\n</code>')
+  })
+
   it('renders blockquotes used by the composer preview', () => {
     expect(renderSafeMarkdown('正文\n\n> 引用内容')).toContain('<blockquote>')
   })

@@ -100,7 +100,7 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="cooked markdown-body" v-html="topic.contentHtml" />
+              <MarkdownContent class="cooked" :html="topic.contentHtml" />
 
               <div v-if="topic.externalUrl || adminSession.authenticated" class="post-actions">
                 <a v-if="topic.externalUrl" :href="topic.externalUrl" class="btn btn-primary" target="_blank" rel="noopener noreferrer">

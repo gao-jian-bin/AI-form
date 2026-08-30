@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { applyMarkdownAction, continueOrderedList, insertMarkdownBlock } from '../app/utils/markdown-editor'
+import {
+  applyMarkdownAction,
+  COMPOSER_TOOLS,
+  continueOrderedList,
+  insertMarkdownBlock,
+} from '../app/utils/markdown-editor'
 
 describe('applyMarkdownAction', () => {
+  it('offers one Discourse-style preformatted-text action for inline and multiline text', () => {
+    expect(COMPOSER_TOOLS.filter(tool => ['code', 'code-block'].includes(tool.id))).toEqual([
+      { id: 'code', label: '预格式化文本', text: '</>' },
+    ])
+  })
+
   it('wraps the current selection in bold markers and keeps the inner text selected', () => {
     expect(applyMarkdownAction('这是重点内容', 2, 4, 'bold')).toEqual({
       value: '这是**重点**内容',
@@ -63,9 +74,8 @@ describe('applyMarkdownAction', () => {
       .toBe('- [ ] 待办一\n- [ ] 待办二')
   })
 
-  it('inserts explicit heading and fenced code block formats', () => {
+  it('inserts an explicit third-level heading', () => {
     expect(applyMarkdownAction('', 0, 0, 'heading-3').value).toBe('### 三级标题')
-    expect(applyMarkdownAction('', 0, 0, 'code-block').value).toBe('```\n代码内容\n```')
   })
 
   it('inserts editable GFM tables and thematic breaks on block boundaries', () => {

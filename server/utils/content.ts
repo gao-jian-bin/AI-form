@@ -57,7 +57,7 @@ export function renderSafeMarkdown(markdown: string): string {
     breaks: false,
   })
 
-  return sanitizeHtml(rendered, {
+  const safeHtml = sanitizeHtml(rendered, {
     allowedTags: MARKDOWN_TAGS,
     allowedAttributes: {
       a: ['href', 'title', 'target', 'rel'],
@@ -94,4 +94,9 @@ export function renderSafeMarkdown(markdown: string): string {
       }),
     },
   })
+
+  return safeHtml.replace(
+    /<pre>([\s\S]*?)<\/pre>/g,
+    '<div class="code-block-wrapper"><button type="button" class="code-block-copy" data-copy-code aria-label="复制预格式化文本">复制</button><pre>$1</pre></div>',
+  )
 }

@@ -5,7 +5,6 @@ export type MarkdownAction =
   | 'link'
   | 'quote'
   | 'code'
-  | 'code-block'
   | 'bullet-list'
   | 'numbered-list'
   | 'task-list'
@@ -34,8 +33,7 @@ export const COMPOSER_TOOLS: ComposerTool[] = [
   { id: 'strikethrough', label: '删除线', text: 'S̶' },
   { id: 'link', label: '插入链接', text: '🔗', shortcut: 'Ctrl+K' },
   { id: 'quote', label: '引用', text: '❝' },
-  { id: 'code', label: '行内代码', text: '</>' },
-  { id: 'code-block', label: '代码块', text: '{ }' },
+  { id: 'code', label: '预格式化文本', text: '</>' },
   { id: 'bullet-list', label: '无序列表', text: '•—' },
   { id: 'numbered-list', label: '有序列表', text: '1.' },
   { id: 'task-list', label: '任务列表', text: '☐' },
@@ -228,10 +226,6 @@ export function applyMarkdownAction(
         return replaceBlock(value, start, end, `\`\`\`\n${selected}\n\`\`\``, 4, selected.length)
       }
       return wrapSelection(value, start, end, '`', '`', '代码')
-    }
-    case 'code-block': {
-      const selected = value.slice(start, end) || '代码内容'
-      return replaceBlock(value, start, end, `\`\`\`\n${selected}\n\`\`\``, 4, selected.length)
     }
     case 'table': {
       const beforeSelection = '| 列 1 | 列 2 |\n| --- | --- |\n| '
