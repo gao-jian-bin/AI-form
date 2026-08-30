@@ -23,6 +23,17 @@ export interface StoredUploadFile {
   modifiedAt: string
 }
 
+export interface StoreUploadedImageOptions {
+  uploadRoot?: string
+  quotaBytes?: number
+  now?: Date
+}
+
+export interface DeleteStoredImageOptions {
+  minimumAgeMs?: number
+  now?: Date
+}
+
 export class UploadQuotaExceededError extends Error {
   constructor() {
     super('图片存储空间已满，请先在图片管理中删除未使用图片或调高配额')
@@ -32,6 +43,20 @@ export class UploadQuotaExceededError extends Error {
 
 const UPLOAD_PATH_PATTERN = /^(\d{4})\/(0[1-9]|1[0-2])\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.(png|jpg|gif|webp)$/i
 const UPLOAD_URL_PATTERN = /\/uploads\/((\d{4})\/(0[1-9]|1[0-2])\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.(png|jpg|gif|webp))/gi
+let uploadWriteBarrier: Promise<void> = Promise.resolve()
+
+async function withUploadWriteLock<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = uploadWriteBarrier
+  let release!: () => void
+  uploadWriteBarrier = new Promise(resolveRelease => { release = resolveRelease })
+  await previous
+  try {
+    return await operation()
+  }
+  finally {
+    release()
+  }
+}
 
 function startsWithBytes(data: Uint8Array, expected: readonly number[], offset = 0): boolean {
   if (data.length < offset + expected.length) return false
@@ -95,6 +120,25 @@ export function uploadQuotaBytes(): number {
   return Math.floor(boundedMb * 1024 * 1024)
 }
 
+export function uploadCleanupGraceMs(): number {
+  const configuredHours = Number(process.env.UPLOAD_CLEANUP_GRACE_HOURS ?? 168)
+  const boundedHours = Number.isFinite(configuredHours) && configuredHours >= 0
+    ? Math.min(configuredHours, 24 * 365)
+    : 168
+  return Math.floor(boundedHours * 60 * 60 * 1000)
+}
+
+export function isUploadCleanupEligible(
+  file: Pick<StoredUploadFile, 'modifiedAt'>,
+  referenced: boolean,
+  now = new Date(),
+  graceMs = uploadCleanupGraceMs(),
+): boolean {
+  if (referenced) return false
+  const modifiedAt = new Date(file.modifiedAt).getTime()
+  return Number.isFinite(modifiedAt) && now.getTime() - modifiedAt >= Math.max(0, graceMs)
+}
+
 export function assertUploadCapacity(currentBytes: number, incomingBytes: number, quotaBytes: number): void {
   if (currentBytes + incomingBytes > quotaBytes) throw new UploadQuotaExceededError()
 }
@@ -154,11 +198,21 @@ export async function deleteStoredImage(
   root: string,
   uploadPath: string,
   references: Set<string>,
+  options: DeleteStoredImageOptions = {},
 ): Promise<boolean> {
   if (references.has(uploadPath)) throw new Error('图片仍被帖子引用，不能删除')
   const filePath = resolveUploadPath(root, uploadPath)
   if (!filePath) return false
   try {
+    const fileStats = await stat(filePath)
+    if (!isUploadCleanupEligible(
+      { modifiedAt: fileStats.mtime.toISOString() },
+      false,
+      options.now,
+      options.minimumAgeMs ?? 0,
+    )) {
+      throw new Error('图片仍在暂存保护期内，暂时不能删除')
+    }
     await unlink(filePath)
     return true
   }
@@ -168,28 +222,34 @@ export async function deleteStoredImage(
   }
 }
 
-export async function storeUploadedImage(data: Buffer, filename?: string): Promise<StoredImage> {
+export async function storeUploadedImage(
+  data: Buffer,
+  filename?: string,
+  options: StoreUploadedImageOptions = {},
+): Promise<StoredImage> {
   const imageType = detectImageType(data)
   if (!imageType) throw new Error('只支持 PNG、JPEG、WebP 或 GIF 图片')
 
-  const now = new Date()
+  const now = options.now ?? new Date()
   const year = String(now.getFullYear())
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const id = randomUUID()
   const relativePath = `${year}/${month}/${id}.${imageType.extension}`
-  const uploadRoot = getUploadRoot()
+  const uploadRoot = options.uploadRoot ?? getUploadRoot()
   const filePath = resolveUploadPath(uploadRoot, relativePath)
   if (!filePath) throw new Error('无法生成图片保存路径')
 
-  const storedFiles = await listStoredImages(uploadRoot)
-  assertUploadCapacity(
-    storedFiles.reduce((total, file) => total + file.size, 0),
-    data.length,
-    uploadQuotaBytes(),
-  )
+  await withUploadWriteLock(async () => {
+    const storedFiles = await listStoredImages(uploadRoot)
+    assertUploadCapacity(
+      storedFiles.reduce((total, file) => total + file.size, 0),
+      data.length,
+      options.quotaBytes ?? uploadQuotaBytes(),
+    )
 
-  await mkdir(resolve(uploadRoot, year, month), { recursive: true })
-  await writeFile(filePath, data, { flag: 'wx' })
+    await mkdir(resolve(uploadRoot, year, month), { recursive: true })
+    await writeFile(filePath, data, { flag: 'wx' })
+  })
 
   return {
     ...imageType,

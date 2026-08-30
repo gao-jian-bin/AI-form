@@ -9,6 +9,6 @@ export default defineEventHandler((event) => {
     getForumDatabase(),
     numericRouteId(getRouterParam(event, 'id'), '板块'),
   )
-  if (!category) throw createError({ statusCode: 404, statusMessage: '板块不存在' })
+  if (!category) throw createError({ statusCode: 404, message: '板块不存在' })
   return category
 })

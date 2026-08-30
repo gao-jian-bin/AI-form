@@ -74,10 +74,12 @@ export interface UploadInventoryItem {
   size: number
   modifiedAt: string
   referenced: boolean
+  cleanupEligible: boolean
 }
 
 export interface UploadInventory {
   items: UploadInventoryItem[]
   usedBytes: number
   quotaBytes: number
+  cleanupGraceHours: number
 }

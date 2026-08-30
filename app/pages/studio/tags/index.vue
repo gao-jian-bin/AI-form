@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ForumTag } from '~/types/forum'
+import { getErrorMessage } from '~/utils/error-message'
 
 definePageMeta({ layout: 'studio', middleware: 'admin' })
 useSeoMeta({ title: '标签管理', robots: 'noindex, nofollow' })
@@ -16,8 +17,8 @@ async function removeTag(tag: ForumTag) {
   try {
     await $fetch(`/api/studio/tags/${tag.id}`, { method: 'DELETE' })
     await refresh()
-  } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || error?.statusMessage || '删除失败，请稍后重试'
+  } catch (error: unknown) {
+    errorMessage.value = getErrorMessage(error, '删除失败，请稍后重试')
   }
 }
 </script>

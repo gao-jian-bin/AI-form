@@ -13,7 +13,12 @@ export interface ComposerDraftFields {
 export interface ComposerDraft {
   version: 1
   savedAt: string
+  preserveAcrossServerUpdate?: true
   fields: ComposerDraftFields
+}
+
+interface SerializeComposerDraftOptions {
+  preserveAcrossServerUpdate?: boolean
 }
 
 export function composerDraftKey(topicId?: number): string {
@@ -22,12 +27,18 @@ export function composerDraftKey(topicId?: number): string {
     : 'ai-forum:composer-draft:new'
 }
 
-export function serializeComposerDraft(fields: ComposerDraftFields, savedAt = new Date()): string {
-  return JSON.stringify({
+export function serializeComposerDraft(
+  fields: ComposerDraftFields,
+  savedAt = new Date(),
+  options: SerializeComposerDraftOptions = {},
+): string {
+  const draft: ComposerDraft = {
     version: 1,
     savedAt: savedAt.toISOString(),
     fields: { ...fields, tags: [...fields.tags] },
-  } satisfies ComposerDraft)
+  }
+  if (options.preserveAcrossServerUpdate) draft.preserveAcrossServerUpdate = true
+  return JSON.stringify(draft)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -61,14 +72,21 @@ export function parseComposerDraft(raw: string | null, serverUpdatedAt?: string 
   try {
     const parsed: unknown = JSON.parse(raw)
     if (!isRecord(parsed) || parsed.version !== 1 || typeof parsed.savedAt !== 'string') return null
+    if (parsed.preserveAcrossServerUpdate !== undefined && parsed.preserveAcrossServerUpdate !== true) return null
     const savedTime = new Date(parsed.savedAt).getTime()
     if (!Number.isFinite(savedTime)) return null
-    if (serverUpdatedAt) {
+    if (serverUpdatedAt && parsed.preserveAcrossServerUpdate !== true) {
       const serverTime = new Date(serverUpdatedAt).getTime()
       if (Number.isFinite(serverTime) && savedTime <= serverTime) return null
     }
     const fields = parseFields(parsed.fields)
-    return fields ? { version: 1, savedAt: new Date(savedTime).toISOString(), fields } : null
+    if (!fields) return null
+    return {
+      version: 1,
+      savedAt: new Date(savedTime).toISOString(),
+      ...(parsed.preserveAcrossServerUpdate === true ? { preserveAcrossServerUpdate: true as const } : {}),
+      fields,
+    }
   }
   catch {
     return null

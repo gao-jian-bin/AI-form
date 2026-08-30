@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { StudioCategory } from '~/types/forum'
+import { getErrorMessage } from '~/utils/error-message'
 
 definePageMeta({ layout: 'studio', middleware: 'admin' })
 useSeoMeta({ title: '板块管理', robots: 'noindex, nofollow' })
@@ -13,8 +14,8 @@ async function removeCategory(category: StudioCategory) {
   try {
     await $fetch(`/api/studio/categories/${category.id}`, { method: 'DELETE' })
     await refresh()
-  } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || error?.statusMessage || '删除失败，请稍后重试'
+  } catch (error: unknown) {
+    errorMessage.value = getErrorMessage(error, '删除失败，请稍后重试')
   }
 }
 </script>

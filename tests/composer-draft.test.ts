@@ -43,4 +43,19 @@ describe('composer draft recovery', () => {
     expect(parseComposerDraft(serialized, '2026-08-20T08:00:00.000Z')).not.toBeNull()
     expect(parseComposerDraft(serialized, '2026-08-22T08:00:00.000Z')).toBeNull()
   })
+
+  it('keeps a preflight recovery draft across an intentional server revision restore', () => {
+    const serialized = serializeComposerDraft(
+      fields,
+      new Date('2026-08-21T08:00:00.000Z'),
+      { preserveAcrossServerUpdate: true },
+    )
+
+    expect(parseComposerDraft(serialized, '2026-08-22T08:00:00.000Z')).toEqual({
+      version: 1,
+      savedAt: '2026-08-21T08:00:00.000Z',
+      preserveAcrossServerUpdate: true,
+      fields,
+    })
+  })
 })

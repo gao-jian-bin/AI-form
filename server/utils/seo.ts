@@ -66,7 +66,10 @@ export function buildSitemapXml(siteUrl: string, content: SitemapContent): strin
 export function buildAtomFeedXml(siteUrl: string, content: AtomFeedContent): string {
   const baseUrl = baseSiteUrl(siteUrl)
   const feedUrl = `${baseUrl}/feed.xml`
-  const updatedAt = content.topics[0]?.updatedAt || '1970-01-01T00:00:00.000Z'
+  const updatedAt = content.topics.reduce(
+    (latest, topic) => topic.updatedAt > latest ? topic.updatedAt : latest,
+    '1970-01-01T00:00:00.000Z',
+  )
   const entries = content.topics.map(topic => {
     const url = topicUrl(baseUrl, topic)
     const publishedAt = topic.publishedAt || topic.updatedAt

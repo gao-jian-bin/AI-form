@@ -6,6 +6,6 @@ import { numericRouteId, requireAdmin } from '../../../utils/http'
 export default defineEventHandler((event) => {
   requireAdmin(event)
   const deleted = deleteTopic(getForumDatabase(), numericRouteId(getRouterParam(event, 'id')))
-  if (!deleted) throw createError({ statusCode: 404, statusMessage: '主题不存在' })
+  if (!deleted) throw createError({ statusCode: 404, message: '主题不存在' })
   return { ok: true }
 })

@@ -1,5 +1,5 @@
 import { setHeader } from 'h3'
-import { listAllPublicTopics } from '../utils/database'
+import { listRecentFeedTopics } from '../utils/database'
 import { getForumDatabase } from '../utils/forum'
 import { buildAtomFeedXml } from '../utils/seo'
 
@@ -10,6 +10,6 @@ export default defineEventHandler((event) => {
   return buildAtomFeedXml(process.env.SITE_URL || 'http://localhost:3000', {
     siteName: String(config.public.siteName || 'AI 知识论坛'),
     description: String(config.public.siteDescription || 'ChatGPT 方法和实用工具。'),
-    topics: listAllPublicTopics(getForumDatabase()),
+    topics: listRecentFeedTopics(getForumDatabase()),
   })
 })

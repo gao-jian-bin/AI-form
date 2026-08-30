@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ForumCategory, ForumTag, TopicPage } from '~/types/forum'
+import { getErrorMessage } from '~/utils/error-message'
 
 const route = useRoute()
 const page = computed(() => typeof route.query.page === 'string' ? route.query.page : '1')
@@ -26,7 +27,7 @@ useSeoMeta({
     :categories="categories"
     :tags="tags"
     :pending="status === 'pending'"
-    :error-message="error?.statusMessage"
+    :error-message="getErrorMessage(error, '')"
     @retry="refresh"
   />
 </template>

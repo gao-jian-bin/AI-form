@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     const input = parseTagPayload(await readBody(event))
     const db = getForumDatabase()
     if (!getStudioTag(db, id)) {
-      throw createError({ statusCode: 404, statusMessage: '标签不存在' })
+      throw createError({ statusCode: 404, message: '标签不存在' })
     }
     return updateTag(db, id, input)
   } catch (error) {

@@ -7,7 +7,7 @@ import { numericRouteId } from '../../utils/http'
 export default defineEventHandler((event) => {
   const id = numericRouteId(getRouterParam(event, 'id'))
   const topic = getPublicTopic(getForumDatabase(), id)
-  if (!topic) throw createError({ statusCode: 404, statusMessage: '主题不存在' })
+  if (!topic) throw createError({ statusCode: 404, message: '主题不存在' })
 
   return {
     ...topic,

@@ -1052,6 +1052,22 @@ html.composer-fullscreen body {
   overflow: hidden;
 }
 
+.skip-link {
+  position: fixed;
+  z-index: 3000;
+  top: 8px;
+  left: 8px;
+  padding: 0.6em 0.85em;
+  border-radius: 4px;
+  color: #ffffff;
+  background: var(--tertiary);
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .discourse-composer {
   position: fixed;
   z-index: 1250;

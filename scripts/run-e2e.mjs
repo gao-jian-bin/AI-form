@@ -1,22 +1,32 @@
 import { spawn, spawnSync } from 'node:child_process'
+import { scryptSync } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { get } from 'node:http'
-import { resolve } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 
 const host = '127.0.0.1'
 const port = '4190'
 const baseUrl = `http://${host}:${port}`
 const projectRoot = resolve(import.meta.dirname, '..')
+const e2eTempParent = resolve(projectRoot, '.data/e2e-runs')
+mkdirSync(e2eTempParent, { recursive: true })
+const e2eDataRoot = mkdtempSync(join(e2eTempParent, 'run-'))
+const e2eAdminPassword = 'ai-forum-local-admin'
+const e2eAdminSalt = Buffer.from('ai-forum-e2e-salt')
+const e2eAdminPasswordHash = `scrypt$${e2eAdminSalt.toString('base64url')}$${scryptSync(e2eAdminPassword, e2eAdminSalt, 64).toString('base64url')}`
 
 const serverEnvironment = {
   ...process.env,
   HOST: host,
   PORT: port,
-  DATABASE_PATH: '.data/e2e-forum.db',
-  UPLOAD_DIR: '.data/e2e-uploads',
+  NODE_ENV: 'test',
+  DATABASE_PATH: join(e2eDataRoot, 'forum.db'),
+  UPLOAD_DIR: join(e2eDataRoot, 'uploads'),
   SEED_DEMO_CONTENT: 'true',
-  ADMIN_PASSWORD: 'ai-forum-local-admin',
+  ADMIN_PASSWORD_HASH: e2eAdminPasswordHash,
   E2E_INSECURE_ADMIN_COOKIE: 'true',
   VIEW_HASH_SECRET: 'e2e-view-secret',
+  UPLOAD_CLEANUP_GRACE_HOURS: '0',
 }
 
 function waitForExit(child) {
@@ -52,14 +62,30 @@ async function waitForServer(child) {
 
 async function stopServer(child) {
   if (!child.pid || child.exitCode !== null) return
-  if (process.platform === 'win32') {
+  child.kill('SIGTERM')
+  const exited = await Promise.race([
+    waitForExit(child).then(() => true),
+    new Promise(resolveWait => setTimeout(() => resolveWait(false), 3_000)),
+  ])
+  if (!exited && process.platform === 'win32') {
     spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
       stdio: 'ignore',
       windowsHide: true,
     })
-  } else {
-    child.kill('SIGTERM')
+    await new Promise(resolveWait => setTimeout(resolveWait, 250))
   }
+  else if (!exited) {
+    child.kill('SIGKILL')
+    await new Promise(resolveWait => setTimeout(resolveWait, 250))
+  }
+}
+
+function cleanupE2eData(root) {
+  const relativePath = relative(e2eTempParent, resolve(root))
+  if (!relativePath.startsWith('run-') || relativePath.includes(sep)) {
+    throw new Error(`拒绝清理非测试临时目录：${root}`)
+  }
+  rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 }
 
 const server = spawn(process.execPath, ['.output/server/index.mjs'], {
@@ -85,6 +111,12 @@ try {
   exitCode = await waitForExit(playwright)
 } finally {
   await stopServer(server)
+  try {
+    cleanupE2eData(e2eDataRoot)
+  }
+  catch (error) {
+    console.warn('测试临时目录清理失败，可在系统临时目录中稍后清理。', error)
+  }
 }
 
 process.exit(exitCode)

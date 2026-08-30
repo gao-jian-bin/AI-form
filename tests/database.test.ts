@@ -17,8 +17,11 @@ import {
   listPublicTags,
   listPublicTopicPage,
   listPublicTopics,
+  listRecentFeedTopics,
+  listSitemapTopicMetadata,
   listStudioCategories,
   listStudioTags,
+  listTopicMarkdownSources,
   migrateForumDatabase,
   purgeOperationalData,
   recordTopicView,
@@ -54,6 +57,42 @@ describe('forum database', () => {
     expect(forumSchemaVersion(db)).toBe(2)
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'topic_revisions'").get())
       .toEqual({ name: 'topic_revisions' })
+  })
+
+  it('migrates a schema-zero database without losing existing topics', () => {
+    const legacy = createForumDatabase(':memory:')
+    try {
+      legacy.exec(`
+        CREATE TABLE categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE,
+          description TEXT NOT NULL DEFAULT '', color TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        CREATE TABLE topics (
+          id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, slug TEXT NOT NULL,
+          excerpt TEXT NOT NULL DEFAULT '', content_markdown TEXT NOT NULL DEFAULT '',
+          category_id INTEGER NOT NULL REFERENCES categories(id),
+          status TEXT NOT NULL CHECK (status IN ('draft', 'published')), is_pinned INTEGER NOT NULL DEFAULT 0,
+          external_url TEXT, view_count INTEGER NOT NULL DEFAULT 0, published_at TEXT,
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        );
+        INSERT INTO categories VALUES (1, '旧板块', 'legacy', '', '#64748b', 1,
+          '2025-01-01T00:00:00.000Z', '2025-01-01T00:00:00.000Z');
+        INSERT INTO topics VALUES (1, '旧帖子', 'legacy-topic', '摘要', '旧正文', 1, 'published', 0,
+          NULL, 3, '2025-01-01T00:00:00.000Z', '2025-01-01T00:00:00.000Z', '2025-01-01T00:00:00.000Z');
+      `)
+
+      migrateForumDatabase(legacy)
+
+      expect(forumSchemaVersion(legacy)).toBe(2)
+      expect(getStudioTopic(legacy, 1)).toEqual(expect.objectContaining({
+        title: '旧帖子',
+        contentMarkdown: '旧正文',
+      }))
+    }
+    finally {
+      legacy.close()
+    }
   })
 
   it('does not overwrite administrator changes when defaults are ensured again', () => {
@@ -319,6 +358,69 @@ describe('forum database', () => {
       title: '版本二',
       tags: ['二'],
     }))
+  })
+
+  it('keeps revision Markdown in the upload reference inventory', () => {
+    const oldImage = '/uploads/2026/08/123e4567-e89b-42d3-a456-426614174000.png'
+    const created = saveTopic(db, {
+      title: '带图片的版本', categorySlug: 'chatgpt', contentMarkdown: `旧图 ![](${oldImage})`, status: 'published',
+      tags: [], isPinned: false, externalUrl: null,
+    })
+    saveTopic(db, {
+      id: created.id,
+      title: '移除图片后的版本', categorySlug: 'chatgpt', contentMarkdown: '新正文', status: 'published',
+      tags: [], isPinned: false, externalUrl: null,
+    })
+
+    expect(listTopicMarkdownSources(db)).toEqual(expect.arrayContaining([
+      `旧图 ![](${oldImage})`,
+      '新正文',
+    ]))
+  })
+
+  it('restores an old revision into the current category when its original category was deleted', () => {
+    const oldCategory = createCategory(db, {
+      name: '可删除旧板块', slug: 'old-section', description: '', color: '#64748b', position: 9,
+    })
+    const created = saveTopic(db, {
+      title: '旧板块版本', categorySlug: oldCategory.slug, contentMarkdown: '旧正文', status: 'published',
+      tags: [], isPinned: false, externalUrl: null,
+    })
+    saveTopic(db, {
+      id: created.id,
+      title: '当前版本', categorySlug: 'toolbox', contentMarkdown: '当前正文', status: 'published',
+      tags: [], isPinned: false, externalUrl: null,
+    })
+    const revision = listTopicRevisions(db, created.id)[0]!
+    expect(deleteCategory(db, oldCategory.id)).toBe(true)
+
+    const restored = restoreTopicRevision(db, created.id, revision.id)
+
+    expect(restored).toEqual(expect.objectContaining({
+      title: '旧板块版本',
+      contentMarkdown: '旧正文',
+      category: expect.objectContaining({ slug: 'toolbox' }),
+    }))
+  })
+
+  it('uses metadata-only projections for sitemap and a bounded recent feed', () => {
+    saveTopic(db, {
+      title: '较早置顶', categorySlug: 'chatgpt', contentMarkdown: '不应进入元数据查询的长正文', status: 'published',
+      tags: [], isPinned: true, externalUrl: null, publishedAt: '2024-01-01T00:00:00.000Z',
+    })
+    const latest = saveTopic(db, {
+      title: '最新内容', categorySlug: 'toolbox', contentMarkdown: '正文', status: 'published',
+      tags: [], isPinned: false, externalUrl: null, publishedAt: '2025-01-01T00:00:00.000Z',
+    })
+
+    const sitemapTopics = listSitemapTopicMetadata(db)
+    expect(Object.keys(sitemapTopics[0]!).sort()).toEqual(['id', 'slug', 'updatedAt'])
+    const feedTopics = listRecentFeedTopics(db, 1)
+    expect(feedTopics).toHaveLength(1)
+    expect(feedTopics[0]).toEqual(expect.objectContaining({ id: latest.id, title: '最新内容' }))
+    expect(Object.keys(feedTopics[0]!).sort()).toEqual([
+      'excerpt', 'id', 'publishedAt', 'slug', 'title', 'updatedAt',
+    ])
   })
 
   it('stores an administrator supplied publish time', () => {

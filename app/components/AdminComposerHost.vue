@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
+import { getErrorMessage } from '~/utils/error-message'
 
 const { request, collapsed, close, toggleCollapsed, markSaved } = useAdminComposer()
 const router = useRouter()
@@ -31,8 +32,8 @@ watch(request, async (next) => {
     ]
     ;[categories.value, knownTags.value, topic.value] = await Promise.all(jobs)
   }
-  catch (error: any) {
-    loadError.value = error?.data?.statusMessage || '编辑器加载失败'
+  catch (error: unknown) {
+    loadError.value = getErrorMessage(error, '编辑器加载失败')
   }
   finally {
     loading.value = false

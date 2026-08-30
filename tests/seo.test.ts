@@ -40,4 +40,23 @@ describe('buildAtomFeedXml', () => {
     expect(xml).toContain('href="https://forum.example.com/t/markdown-%E6%8A%80%E5%B7%A7/8"')
     expect(xml).not.toContain('<代码>')
   })
+
+  it('uses the newest entry update time for the feed metadata', () => {
+    const xml = buildAtomFeedXml('https://forum.example.com', {
+      siteName: 'AI 论坛',
+      description: '知识聚合',
+      topics: [
+        {
+          id: 1, slug: 'pinned-old', title: '旧置顶', excerpt: '',
+          publishedAt: '2024-01-01T00:00:00.000Z', updatedAt: '2024-02-01T00:00:00.000Z',
+        },
+        {
+          id: 2, slug: 'newer', title: '新内容', excerpt: '',
+          publishedAt: '2025-01-01T00:00:00.000Z', updatedAt: '2025-02-01T00:00:00.000Z',
+        },
+      ],
+    })
+
+    expect(xml).toContain('  <updated>2025-02-01T00:00:00.000Z</updated>')
+  })
 })

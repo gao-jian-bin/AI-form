@@ -104,6 +104,18 @@ export interface PublicTopicFilters {
   query?: string
 }
 
+export interface SitemapTopicMetadata {
+  id: number
+  slug: string
+  updatedAt: string
+}
+
+export interface FeedTopicMetadata extends SitemapTopicMetadata {
+  title: string
+  excerpt: string
+  publishedAt: string | null
+}
+
 interface RawTopicRow {
   id: number
   title: string
@@ -621,12 +633,42 @@ export function listPublicTopics(
   return rows.map(mapTopic)
 }
 
-export function listAllPublicTopics(db: Database.Database): TopicRecord[] {
-  const rows = db.prepare(`${TOPIC_SELECT}
-    WHERE topics.status = 'published'
-    ORDER BY topics.is_pinned DESC, topics.published_at DESC, topics.id DESC
-  `).all() as RawTopicRow[]
-  return rows.map(mapTopic)
+export function listSitemapTopicMetadata(db: Database.Database): SitemapTopicMetadata[] {
+  const rows = db.prepare(`
+    SELECT id, slug, updated_at
+    FROM topics
+    WHERE status = 'published'
+    ORDER BY published_at DESC, id DESC
+  `).all() as Array<{ id: number; slug: string; updated_at: string }>
+  return rows.map(row => ({ id: row.id, slug: row.slug, updatedAt: row.updated_at }))
+}
+
+export function listRecentFeedTopics(
+  db: Database.Database,
+  limit = 50,
+): FeedTopicMetadata[] {
+  const rows = db.prepare(`
+    SELECT id, slug, title, excerpt, published_at, updated_at
+    FROM topics
+    WHERE status = 'published'
+    ORDER BY published_at DESC, id DESC
+    LIMIT ?
+  `).all(Math.min(Math.max(Math.trunc(limit), 1), 100)) as Array<{
+    id: number
+    slug: string
+    title: string
+    excerpt: string
+    published_at: string | null
+    updated_at: string
+  }>
+  return rows.map(row => ({
+    id: row.id,
+    slug: row.slug,
+    title: row.title,
+    excerpt: row.excerpt,
+    publishedAt: row.published_at,
+    updatedAt: row.updated_at,
+  }))
 }
 
 export function listPublicTopicPage(
@@ -666,7 +708,11 @@ export function listStudioTopics(db: Database.Database): TopicRecord[] {
 }
 
 export function listTopicMarkdownSources(db: Database.Database): string[] {
-  return (db.prepare('SELECT content_markdown FROM topics').all() as Array<{ content_markdown: string }>)
+  return (db.prepare(`
+    SELECT content_markdown FROM topics
+    UNION ALL
+    SELECT content_markdown FROM topic_revisions
+  `).all() as Array<{ content_markdown: string }>)
     .map(row => row.content_markdown)
 }
 
@@ -907,13 +953,15 @@ export function restoreTopicRevision(
   const current = getStudioTopic(db, topicId)
   const revision = getTopicRevision(db, topicId, revisionId)
   if (!current || !revision) return null
+  const revisionCategoryExists = db.prepare('SELECT 1 FROM categories WHERE slug = ?')
+    .get(revision.categorySlug)
 
   return saveTopic(db, {
     id: topicId,
     title: revision.title,
     slug: revision.slug,
     excerpt: revision.excerpt,
-    categorySlug: revision.categorySlug,
+    categorySlug: revisionCategoryExists ? revision.categorySlug : current.category.slug,
     contentMarkdown: revision.contentMarkdown,
     status: revision.status,
     tags: revision.tags,

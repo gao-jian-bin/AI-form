@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { StudioCategory } from '~/types/forum'
+import { getErrorMessage } from '~/utils/error-message'
 
 const props = defineProps<{ category?: StudioCategory | null }>()
 
@@ -25,8 +26,8 @@ async function save() {
       body: form,
     })
     await navigateTo('/studio/categories')
-  } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || error?.statusMessage || '保存失败，请检查输入后重试'
+  } catch (error: unknown) {
+    errorMessage.value = getErrorMessage(error, '保存失败，请检查输入后重试')
   } finally {
     busy.value = false
   }

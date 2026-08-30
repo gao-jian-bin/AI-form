@@ -9,6 +9,6 @@ export default defineEventHandler((event) => {
     getForumDatabase(),
     numericRouteId(getRouterParam(event, 'id'), '标签'),
   )
-  if (!tag) throw createError({ statusCode: 404, statusMessage: '标签不存在' })
+  if (!tag) throw createError({ statusCode: 404, message: '标签不存在' })
   return tag
 })

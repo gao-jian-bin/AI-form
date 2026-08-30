@@ -8,7 +8,7 @@ export default defineEventHandler((event) => {
   const topicId = numericRouteId(getRouterParam(event, 'id'))
   const db = getForumDatabase()
   if (!getStudioTopic(db, topicId)) {
-    throw createError({ statusCode: 404, statusMessage: '主题不存在' })
+    throw createError({ statusCode: 404, message: '主题不存在' })
   }
   return listTopicRevisions(db, topicId)
 })

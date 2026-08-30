@@ -1,8 +1,8 @@
 import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import {
-  createError,
   getRouterParam,
+  sendNoContent,
   sendStream,
   setHeader,
 } from 'h3'
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const filePath = resolveUploadPath(getUploadRoot(), uploadPath)
   const mimeType = imageMimeTypeFromPath(uploadPath)
   if (!filePath || !mimeType) {
-    throw createError({ statusCode: 404, statusMessage: '图片不存在' })
+    return sendNoContent(event, 404)
   }
 
   let fileSize = 0
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
     if (!fileStats.isFile()) throw new Error('not a file')
     fileSize = fileStats.size
   } catch {
-    throw createError({ statusCode: 404, statusMessage: '图片不存在' })
+    return sendNoContent(event, 404)
   }
 
   setHeader(event, 'content-type', mimeType)

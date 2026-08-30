@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { getErrorMessage } from '~/utils/error-message'
+
 definePageMeta({ layout: 'studio' })
 useSeoMeta({ title: '站长登录', robots: 'noindex, nofollow' })
 
@@ -13,8 +15,8 @@ async function signIn() {
   try {
     await $fetch('/api/auth/login', { method: 'POST', body: { password: password.value } })
     await navigateTo('/studio')
-  } catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || error?.statusMessage || '无法登录，请稍后再试'
+  } catch (error: unknown) {
+    errorMessage.value = getErrorMessage(error, '无法登录，请稍后再试')
   } finally {
     busy.value = false
   }

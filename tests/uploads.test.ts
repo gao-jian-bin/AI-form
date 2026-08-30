@@ -6,10 +6,12 @@ import {
   assertUploadCapacity,
   deleteStoredImage,
   detectImageType,
+  isUploadCleanupEligible,
   listStoredImages,
   referencedUploadPaths,
   resolveUploadPath,
   sanitizeImageAlt,
+  storeUploadedImage,
 } from '../server/utils/uploads'
 
 describe('image uploads', () => {
@@ -82,6 +84,36 @@ describe('image uploads', () => {
     expect(() => assertUploadCapacity(10, 4, 14)).not.toThrow()
   })
 
+  it('protects recent unreferenced uploads during the local-draft grace period', () => {
+    const file = {
+      path: '2026/08/123e4567-e89b-42d3-a456-426614174000.png',
+      url: '/uploads/2026/08/123e4567-e89b-42d3-a456-426614174000.png',
+      size: 10,
+      modifiedAt: '2026-08-30T00:00:00.000Z',
+    }
+    const now = new Date('2026-08-30T12:00:00.000Z')
+
+    expect(isUploadCleanupEligible(file, false, now, 24 * 60 * 60 * 1000)).toBe(false)
+    expect(isUploadCleanupEligible(file, false, now, 6 * 60 * 60 * 1000)).toBe(true)
+    expect(isUploadCleanupEligible(file, true, now, 0)).toBe(false)
+  })
+
+  it('serializes concurrent quota checks so a batch cannot overrun storage', async () => {
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(8),
+    ])
+
+    const results = await Promise.allSettled([
+      storeUploadedImage(png, 'first.png', { uploadRoot, quotaBytes: 20 }),
+      storeUploadedImage(png, 'second.png', { uploadRoot, quotaBytes: 20 }),
+    ])
+
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+    expect((await listStoredImages(uploadRoot)).reduce((total, file) => total + file.size, 0)).toBe(16)
+  })
+
   it('deletes only existing unreferenced generated files', async () => {
     const used = '2026/08/123e4567-e89b-42d3-a456-426614174000.png'
     const unused = '2026/08/223e4567-e89b-42d3-a456-426614174001.png'
@@ -91,6 +123,10 @@ describe('image uploads', () => {
 
     await expect(deleteStoredImage(uploadRoot, used, new Set([used])))
       .rejects.toThrow('图片仍被帖子引用')
+    await expect(deleteStoredImage(uploadRoot, unused, new Set([used]), {
+      minimumAgeMs: 60 * 60 * 1000,
+      now: new Date(),
+    })).rejects.toThrow('图片仍在暂存保护期内')
     await expect(deleteStoredImage(uploadRoot, unused, new Set([used]))).resolves.toBe(true)
     await expect(deleteStoredImage(uploadRoot, unused, new Set([used]))).resolves.toBe(false)
   })

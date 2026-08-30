@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic, TopicRevision } from '~/types/forum'
 import { clampComposerHeight } from '~/utils/composer-layout'
+import { getErrorMessage } from '~/utils/error-message'
 import {
   composerDraftKey,
   parseComposerDraft,
@@ -76,6 +77,7 @@ const form = reactive({
   publishedAt: initialPublishedAt,
 })
 const initialSnapshot = JSON.stringify(form)
+const hasUnsavedChanges = computed(() => JSON.stringify(form) !== initialSnapshot)
 const localDraftKey = composerDraftKey(props.topic?.id)
 const busy = ref(false)
 const errorMessage = ref('')
@@ -115,7 +117,7 @@ const draftStatus = computed(() => {
 })
 
 watch(form, () => {
-  const dirty = JSON.stringify(form) !== initialSnapshot
+  const dirty = hasUnsavedChanges.value
   emit('dirty-change', dirty)
   clearTimeout(localDraftTimer)
   if (!dirty || !import.meta.client) return
@@ -168,6 +170,34 @@ function persistLocalDraft() {
   }).format(savedAt)
 }
 
+function preserveDraftBeforeRevisionRestore(): boolean {
+  if (!import.meta.client) return false
+  const fields = hasUnsavedChanges.value
+    ? draftFields()
+    : recoveryDraft.value?.fields
+  if (!fields) return true
+
+  try {
+    const savedAt = new Date()
+    const serialized = serializeComposerDraft(fields, savedAt, {
+      preserveAcrossServerUpdate: true,
+    })
+    localStorage.setItem(localDraftKey, serialized)
+    if (localStorage.getItem(localDraftKey) !== serialized) {
+      throw new Error('Draft storage verification failed')
+    }
+    localDraftSavedAt.value = new Intl.DateTimeFormat('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(savedAt)
+    return true
+  }
+  catch {
+    revisionsError.value = '浏览器无法保存本机草稿，已取消恢复历史版本；服务器内容没有改变。'
+    return false
+  }
+}
+
 function clearLocalDraft(afterSuccessfulSave = false) {
   clearTimeout(localDraftTimer)
   if (afterSuccessfulSave) skipDraftOnUnmount = true
@@ -213,8 +243,8 @@ async function openRevisions() {
   try {
     revisions.value = await $fetch<TopicRevision[]>(`/api/studio/topics/${props.topic.id}/revisions`)
   }
-  catch (error: any) {
-    revisionsError.value = error?.data?.statusMessage || '历史版本加载失败'
+  catch (error: unknown) {
+    revisionsError.value = getErrorMessage(error, '历史版本加载失败')
   }
   finally {
     revisionsLoading.value = false
@@ -222,7 +252,13 @@ async function openRevisions() {
 }
 
 async function restoreRevision(revision: TopicRevision) {
-  if (!props.topic || !window.confirm(`确定恢复“${revision.title}”这个版本吗？当前版本会自动保留在历史记录中。`)) return
+  if (!props.topic) return
+  const preserveLocalDraft = hasUnsavedChanges.value || Boolean(recoveryDraft.value)
+  const confirmation = preserveLocalDraft
+    ? `你有尚未恢复或尚未保存的本机修改。恢复“${revision.title}”后，这些修改会继续保留为本机草稿，下次打开帖子时可以恢复。是否继续？`
+    : `确定恢复“${revision.title}”这个版本吗？当前已保存版本会自动保留在历史记录中；如果原板块已删除，帖子会保留在当前板块。`
+  if (!window.confirm(confirmation)) return
+  if (preserveLocalDraft && !preserveDraftBeforeRevisionRestore()) return
   restoringRevisionId.value = revision.id
   revisionsError.value = ''
   try {
@@ -230,12 +266,14 @@ async function restoreRevision(revision: TopicRevision) {
       `/api/studio/topics/${props.topic.id}/revisions/${revision.id}`,
       { method: 'POST' },
     )
-    clearLocalDraft(true)
+    if (!preserveLocalDraft) {
+      clearLocalDraft(true)
+    }
     emit('dirty-change', false)
     emit('saved', restored)
   }
-  catch (error: any) {
-    revisionsError.value = error?.data?.statusMessage || '恢复历史版本失败'
+  catch (error: unknown) {
+    revisionsError.value = getErrorMessage(error, '恢复历史版本失败')
   }
   finally {
     restoringRevisionId.value = null
@@ -288,11 +326,8 @@ function validateImageFiles(files: File[]): string | null {
   return null
 }
 
-function uploadErrorText(error: any): string {
-  return error?.data?.statusMessage
-    || error?.data?.message
-    || error?.statusMessage
-    || '图片上传失败，请重试'
+function uploadErrorText(error: unknown): string {
+  return getErrorMessage(error, '图片上传失败，请重试')
 }
 
 async function uploadOneImage(job: PendingImageUpload): Promise<boolean> {
@@ -507,8 +542,8 @@ async function save(status: 'draft' | 'published') {
     emit('dirty-change', false)
     emit('saved', saved)
   }
-  catch (error: any) {
-    errorMessage.value = error?.data?.statusMessage || error?.statusMessage || '保存失败，请检查输入后重试'
+  catch (error: unknown) {
+    errorMessage.value = getErrorMessage(error, '保存失败，请检查输入后重试')
   }
   finally {
     busy.value = false

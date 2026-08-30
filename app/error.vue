@@ -1,5 +1,7 @@
 <script setup lang="ts">
-defineProps<{ error: { statusCode?: number; statusMessage?: string } }>()
+import { getErrorMessage } from '~/utils/error-message'
+
+defineProps<{ error: { statusCode?: number; message?: string; statusMessage?: string } }>()
 
 function goHome() {
   clearError({ redirect: '/' })
@@ -11,7 +13,7 @@ function goHome() {
     <span class="brand-mark">AI</span>
     <p>{{ error.statusCode || 500 }}</p>
     <h1>{{ error.statusCode === 404 ? '这个页面不存在' : '页面暂时无法打开' }}</h1>
-    <p>{{ error.statusMessage || '请稍后再试。' }}</p>
+    <p>{{ getErrorMessage(error, '请稍后再试。') }}</p>
     <button class="button button-primary" type="button" @click="goHome">返回最新主题</button>
   </div>
 </template>

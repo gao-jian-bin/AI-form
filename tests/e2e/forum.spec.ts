@@ -83,7 +83,7 @@ test('image upload API rejects files whose bytes are not an allowed image', asyn
 test('public visitors can browse topics without account controls', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('link', { name: 'AI 知识论坛' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'AI 知识论坛', exact: true })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: '主题' })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: '浏览' })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: '活动' })).toBeVisible()
@@ -106,7 +106,7 @@ test('mobile layout opens the source-shaped sidebar without horizontal overflow'
   await tagToggle.click()
   await expect(sidebar.getByRole('link', { name: /Base64/ })).toBeVisible()
   await sidebar.getByRole('link', { name: /Prompt/ }).click()
-  await expect(page).toHaveURL(/\/tag\/Prompt$/)
+  await expect(page).toHaveURL(/\/tag\/prompt$/)
 
   await page.getByRole('button', { name: '打开导航菜单' }).click()
   const tagSidebar = page.getByRole('complementary', { name: '论坛导航' })
@@ -529,7 +529,7 @@ test('administrator can override a topic publish time in the composer', async ({
 
   await page.goto(`/t/${saved.slug}/${saved.id}`)
   await expect(page.locator('.post-infos time')).toHaveText('2024.01.02')
-  await page.goto('/')
+  await page.goto(`/search?q=${encodeURIComponent(editedTitle)}`)
   await expect(page.locator(`[data-topic-id="${saved.id}"] td.activity time`)).toHaveText('2024.01.02')
 })
 
@@ -707,4 +707,175 @@ test('owner can manage tags, select one, and the chooser closes after selection'
   page.once('dialog', dialog => dialog.accept())
   await row.getByRole('button', { name: '删除' }).click()
   await expect(page.getByRole('row').filter({ hasText: renamedTag })).toHaveCount(0)
+})
+
+test('public routes send security headers, real 404s, canonical redirects, sitemap and feed', async ({ request }) => {
+  const health = await request.get('/api/health')
+  expect(health.ok()).toBe(true)
+  expect(await health.json()).toEqual({ ok: true })
+
+  const home = await request.get('/')
+  expect(home.headers()['x-content-type-options']).toBe('nosniff')
+  expect(home.headers()['x-frame-options']).toBe('DENY')
+  expect(home.headers()['content-security-policy']).toContain("frame-ancestors 'none'")
+
+  expect((await request.get('/c/does-not-exist')).status()).toBe(404)
+  expect((await request.get('/tag/does-not-exist')).status()).toBe(404)
+
+  const pageResponse = await request.get('/api/topics?pageSize=1')
+  const topicPage = await pageResponse.json() as {
+    items: Array<{ id: number; slug: string }>
+    total: number
+  }
+  expect(topicPage.total).toBeGreaterThan(0)
+  const topic = topicPage.items[0]!
+  const wrongSlug = await request.get(`/t/not-the-real-slug/${topic.id}`, { maxRedirects: 0 })
+  expect(wrongSlug.status()).toBe(301)
+  expect(wrongSlug.headers().location).toContain(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+
+  const sitemap = await request.get('/sitemap.xml')
+  expect(sitemap.headers()['content-type']).toContain('application/xml')
+  expect(await sitemap.text()).toContain(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+  const feed = await request.get('/feed.xml')
+  expect(feed.headers()['content-type']).toContain('application/atom+xml')
+  expect(await feed.text()).toContain('<feed xmlns="http://www.w3.org/2005/Atom">')
+})
+
+test('composer recovers a newer browser-local draft only after administrator approval', async ({ page }) => {
+  const title = `本机恢复 ${Date.now()}`
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  let composer = page.getByRole('dialog', { name: '创建新帖子' })
+  await composer.getByRole('textbox', { name: '标题', exact: true }).fill(title)
+  await composer.getByLabel('正文 · Markdown').fill('这段内容只在浏览器本机暂存。')
+  await expect(composer.getByText(/已在本机暂存/)).toBeVisible()
+
+  page.once('dialog', dialog => dialog.accept())
+  await composer.getByRole('button', { name: '关闭编辑器' }).click()
+  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  composer = page.getByRole('dialog', { name: '创建新帖子' })
+  await expect(composer.getByText('发现未保存的本机草稿')).toBeVisible()
+  await composer.getByRole('button', { name: '恢复', exact: true }).click()
+  await expect(composer.getByRole('textbox', { name: '标题', exact: true })).toHaveValue(title)
+  await expect(composer.getByLabel('正文 · Markdown')).toHaveValue('这段内容只在浏览器本机暂存。')
+})
+
+test('administrator can inspect and restore a saved topic revision', async ({ page }) => {
+  const suffix = Date.now()
+  const firstTitle = `历史版本一 ${suffix}`
+  const secondTitle = `历史版本二 ${suffix}`
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+
+  const createdResponse = await page.request.post('/api/studio/topics', {
+    data: {
+      title: firstTitle,
+      categorySlug: 'chatgpt',
+      contentMarkdown: '第一版正文',
+      tags: ['版本测试'],
+      status: 'published',
+      isPinned: false,
+      externalUrl: null,
+    },
+  })
+  expect(createdResponse.ok()).toBe(true)
+  const created = await createdResponse.json() as { id: number }
+  const updatedResponse = await page.request.put(`/api/studio/topics/${created.id}`, {
+    data: {
+      title: secondTitle,
+      categorySlug: 'toolbox',
+      contentMarkdown: '第二版正文',
+      tags: ['版本测试', '第二版'],
+      status: 'published',
+      isPinned: true,
+      externalUrl: null,
+    },
+  })
+  expect(updatedResponse.ok()).toBe(true)
+  await page.reload()
+
+  const row = page.getByRole('row').filter({ hasText: secondTitle })
+  await row.getByRole('button', { name: /编辑帖子/ }).click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+  const unsavedContent = `恢复历史前尚未保存 ${suffix}`
+  await composer.getByLabel('正文 · Markdown').fill(unsavedContent)
+  await expect(composer.getByText(/已在本机暂存/)).toBeVisible()
+  await composer.getByRole('button', { name: '历史版本' }).click()
+  const history = composer.getByLabel('帖子历史版本')
+  await expect(history.getByText(firstTitle, { exact: true })).toBeVisible()
+  page.once('dialog', dialog => dialog.accept())
+  await history.getByRole('button', { name: '恢复此版本' }).click()
+  await expect(composer).toBeHidden()
+
+  const restored = await (await page.request.get(`/api/studio/topics/${created.id}`)).json() as {
+    title: string
+    contentMarkdown: string
+  }
+  expect(restored).toMatchObject({ title: firstTitle, contentMarkdown: '第一版正文' })
+
+  const restoredRow = page.getByRole('row').filter({ hasText: firstTitle })
+  await restoredRow.getByRole('button', { name: /编辑帖子/ }).click()
+  const reopenedComposer = page.getByRole('dialog', { name: '编辑帖子' })
+  await expect(reopenedComposer.getByText('发现未保存的本机草稿')).toBeVisible()
+  await reopenedComposer.getByRole('button', { name: '恢复', exact: true }).click()
+  await expect(reopenedComposer.getByLabel('正文 · Markdown')).toHaveValue(unsavedContent)
+})
+
+test('image management deletes an unreferenced upload from the studio', async ({ page }) => {
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+  const imageBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64',
+  )
+  const upload = await page.request.post('/api/studio/uploads', {
+    multipart: { file: { name: '待清理.png', mimeType: 'image/png', buffer: imageBytes } },
+  })
+  expect(upload.status()).toBe(201)
+  const stored = await upload.json() as { url: string }
+  const uploadPath = stored.url.replace('/uploads/', '')
+
+  await page.goto('/studio/uploads')
+  const card = page.locator('.media-card').filter({ hasText: uploadPath })
+  await expect(card).toBeVisible()
+  await expect(card).toContainText('未使用，可清理')
+  page.once('dialog', dialog => dialog.accept())
+  await card.getByRole('button', { name: '删除' }).click()
+  await expect(page.locator('.media-card').filter({ hasText: uploadPath })).toHaveCount(0)
+  expect((await page.request.get(stored.url)).status()).toBe(404)
+})
+
+test('public topic navigation reaches posts beyond the first page', async ({ page }) => {
+  const tagName = `pagination-${Date.now()}`
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+  for (let index = 1; index <= 31; index += 1) {
+    const response = await page.request.post('/api/studio/topics', {
+      data: {
+        title: `分页验收 ${tagName} ${index}`,
+        categorySlug: 'chatgpt',
+        contentMarkdown: `分页正文 ${index}`,
+        tags: [tagName],
+        status: 'published',
+        isPinned: false,
+        externalUrl: null,
+      },
+    })
+    expect(response.ok()).toBe(true)
+  }
+
+  await page.goto(`/tag/${tagName}`)
+  await expect(page.locator('.topic-list-body > tr')).toHaveCount(30)
+  await expect(page.getByRole('navigation', { name: '帖子分页' })).toContainText('共 31 篇')
+  await page.getByRole('link', { name: '下一页' }).click()
+  await expect(page).toHaveURL(/\?page=2$/)
+  await expect(page.locator('.topic-list-body > tr')).toHaveCount(1)
 })

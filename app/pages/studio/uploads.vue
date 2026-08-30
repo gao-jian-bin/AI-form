@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UploadInventory, UploadInventoryItem } from '~/types/forum'
+import { getErrorMessage } from '~/utils/error-message'
 
 definePageMeta({ layout: 'studio', middleware: 'admin' })
 useSeoMeta({ title: '图片管理', robots: 'noindex, nofollow' })
@@ -8,11 +9,12 @@ const actionError = ref('')
 const actionMessage = ref('')
 const deletingPaths = ref(new Set<string>())
 const { data: inventory, status, error, refresh } = await useFetch<UploadInventory>('/api/studio/uploads', {
-  default: () => ({ items: [], usedBytes: 0, quotaBytes: 1 }),
+  default: () => ({ items: [], usedBytes: 0, quotaBytes: 1, cleanupGraceHours: 168 }),
 })
 
-const unusedImages = computed(() => inventory.value.items.filter(item => !item.referenced))
+const cleanupCandidates = computed(() => inventory.value.items.filter(item => item.cleanupEligible))
 const usagePercent = computed(() => Math.min(100, inventory.value.usedBytes / Math.max(1, inventory.value.quotaBytes) * 100))
+const loadErrorMessage = computed(() => error.value ? getErrorMessage(error.value, '图片列表加载失败') : '')
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`
@@ -39,7 +41,7 @@ async function copyMarkdown(item: UploadInventoryItem) {
 }
 
 async function deleteImage(item: UploadInventoryItem, ask = true): Promise<boolean> {
-  if (item.referenced) return false
+  if (!item.cleanupEligible) return false
   if (ask && !confirm('确定删除这张未被任何帖子引用的图片吗？删除后无法恢复。')) return false
   actionError.value = ''
   actionMessage.value = ''
@@ -48,8 +50,8 @@ async function deleteImage(item: UploadInventoryItem, ask = true): Promise<boole
     await $fetch(`/api/studio/uploads/${item.path}`, { method: 'DELETE' })
     return true
   }
-  catch (uploadError: any) {
-    actionError.value = uploadError?.data?.statusMessage || '图片删除失败'
+  catch (uploadError: unknown) {
+    actionError.value = getErrorMessage(uploadError, '图片删除失败')
     return false
   }
   finally {
@@ -60,10 +62,10 @@ async function deleteImage(item: UploadInventoryItem, ask = true): Promise<boole
 }
 
 async function deleteAllUnused() {
-  if (!unusedImages.value.length) return
-  if (!confirm(`确定删除 ${unusedImages.value.length} 张未使用图片吗？此操作无法恢复。`)) return
+  if (!cleanupCandidates.value.length) return
+  if (!confirm(`确定删除 ${cleanupCandidates.value.length} 张未使用图片吗？此操作无法恢复。`)) return
   let removed = 0
-  for (const item of [...unusedImages.value]) {
+  for (const item of [...cleanupCandidates.value]) {
     if (await deleteImage(item, false)) removed += 1
   }
   await refresh()
@@ -84,11 +86,11 @@ async function removeAndRefresh(item: UploadInventoryItem) {
       <div>
         <p class="stream-eyebrow">MEDIA DESK</p>
         <h1>图片管理</h1>
-        <p>查看编辑器上传到服务器的图片。帖子仍在引用的图片会被保护，不能误删。</p>
+        <p>帖子和历史版本引用的图片不能误删；新上传图片还会保护 {{ inventory.cleanupGraceHours }} 小时，避免本机草稿丢图。</p>
       </div>
       <div class="dashboard-actions">
-        <button class="button button-quiet" type="button" :disabled="!unusedImages.length" @click="deleteAllUnused">
-          清理未使用图片（{{ unusedImages.length }}）
+        <button class="button button-quiet" type="button" :disabled="!cleanupCandidates.length" @click="deleteAllUnused">
+          清理未使用图片（{{ cleanupCandidates.length }}）
         </button>
       </div>
     </header>
@@ -98,7 +100,7 @@ async function removeAndRefresh(item: UploadInventoryItem) {
       <div class="media-usage__track"><span :style="{ width: `${usagePercent}%` }" /></div>
     </div>
 
-    <p v-if="actionError || error" class="form-alert" role="alert">{{ actionError || error?.statusMessage }}</p>
+    <p v-if="actionError || loadErrorMessage" class="form-alert" role="alert">{{ actionError || loadErrorMessage }}</p>
     <p v-else-if="actionMessage" class="form-alert form-alert-success" role="status">{{ actionMessage }}</p>
 
     <div v-if="status === 'pending'" class="state-panel">正在读取图片…</div>
@@ -109,7 +111,7 @@ async function removeAndRefresh(item: UploadInventoryItem) {
         </a>
         <div class="media-card__body">
           <div class="media-card__state" :class="{ used: item.referenced }">
-            {{ item.referenced ? '帖子正在使用' : '未使用，可清理' }}
+            {{ item.referenced ? '帖子或历史版本正在使用' : item.cleanupEligible ? '未使用，可清理' : '本机草稿暂存保护中' }}
           </div>
           <code>{{ item.path }}</code>
           <p>{{ formatBytes(item.size) }} · {{ formatDate(item.modifiedAt) }}</p>
@@ -118,7 +120,7 @@ async function removeAndRefresh(item: UploadInventoryItem) {
             <button
               type="button"
               class="danger"
-              :disabled="item.referenced || deletingPaths.has(item.path)"
+              :disabled="!item.cleanupEligible || deletingPaths.has(item.path)"
               @click="removeAndRefresh(item)"
             >{{ deletingPaths.has(item.path) ? '删除中…' : '删除' }}</button>
           </div>

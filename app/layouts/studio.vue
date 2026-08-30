@@ -23,7 +23,7 @@ const isUploadRoute = computed(() => route.path.startsWith('/studio/uploads'))
       </div>
       <NuxtLink to="/" class="button button-quiet">查看网站 ↗</NuxtLink>
     </header>
-    <main class="studio-main">
+    <main id="main-content" class="studio-main">
       <slot />
     </main>
   </div>

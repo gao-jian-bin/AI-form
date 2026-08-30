@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import type { ForumCategory, ForumTag, TopicDetail, TopicPage } from '~/types/forum'
 import { formatDottedDate } from '~/utils/date-format'
+import { pageErrorDetails } from '~/utils/error-message'
 import { serializeJsonLd } from '~/utils/json-ld'
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
 const { data: topic, error, refresh } = await useFetch<TopicDetail>(() => `/api/topics/${id.value}`)
 
-if (error.value || !topic.value) {
-  throw createError({ statusCode: 404, statusMessage: '主题不存在' })
+if (error.value) {
+  throw createError(pageErrorDetails(error.value, '主题不存在'))
+}
+if (!topic.value) {
+  throw createError({ statusCode: 404, message: '主题不存在' })
 }
 
 const canonicalPath = computed(() => `/t/${encodeURIComponent(topic.value!.slug)}/${topic.value!.id}`)

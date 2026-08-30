@@ -17,24 +17,24 @@ export default defineEventHandler(async (event) => {
 
   const contentLength = Number(getHeader(event, 'content-length') || 0)
   if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES + 1024 * 1024) {
-    throw createError({ statusCode: 413, statusMessage: '单张图片不能超过 10 MB' })
+    throw createError({ statusCode: 413, message: '单张图片不能超过 10 MB' })
   }
 
   const parts = await readMultipartFormData(event)
   const files = parts?.filter(part => part.name === 'file' && part.filename) || []
   if (files.length !== 1) {
-    throw createError({ statusCode: 400, statusMessage: '请选择一张图片上传' })
+    throw createError({ statusCode: 400, message: '请选择一张图片上传' })
   }
 
   const file = files[0]!
   if (file.data.length === 0) {
-    throw createError({ statusCode: 400, statusMessage: '图片内容为空' })
+    throw createError({ statusCode: 400, message: '图片内容为空' })
   }
   if (file.data.length > MAX_IMAGE_BYTES) {
-    throw createError({ statusCode: 413, statusMessage: '单张图片不能超过 10 MB' })
+    throw createError({ statusCode: 413, message: '单张图片不能超过 10 MB' })
   }
   if (!detectImageType(file.data)) {
-    throw createError({ statusCode: 415, statusMessage: '只支持 PNG、JPEG、WebP 或 GIF 图片' })
+    throw createError({ statusCode: 415, message: '只支持 PNG、JPEG、WebP 或 GIF 图片' })
   }
 
   try {
@@ -43,9 +43,9 @@ export default defineEventHandler(async (event) => {
     return storedImage
   } catch (error) {
     if (error instanceof UploadQuotaExceededError) {
-      throw createError({ statusCode: 507, statusMessage: error.message })
+      throw createError({ statusCode: 507, message: error.message })
     }
     console.error(error)
-    throw createError({ statusCode: 500, statusMessage: '图片保存失败，请稍后重试' })
+    throw createError({ statusCode: 500, message: '图片保存失败，请稍后重试' })
   }
 })
