@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
+import type { ForumCategory, ForumTag, StudioTopic, TopicRevision } from '~/types/forum'
 import { clampComposerHeight } from '~/utils/composer-layout'
+import {
+  composerDraftKey,
+  parseComposerDraft,
+  serializeComposerDraft,
+  type ComposerDraft,
+  type ComposerDraftFields,
+} from '~/utils/composer-draft'
 import {
   applyMarkdownAction,
   COMPOSER_TOOLS,
@@ -69,6 +76,7 @@ const form = reactive({
   publishedAt: initialPublishedAt,
 })
 const initialSnapshot = JSON.stringify(form)
+const localDraftKey = composerDraftKey(props.topic?.id)
 const busy = ref(false)
 const errorMessage = ref('')
 const previewHtml = ref('')
@@ -82,10 +90,19 @@ const resizing = ref(false)
 const imageDragActive = ref(false)
 const uploadingImages = ref(0)
 const uploadMessage = ref('')
+const recoveryDraft = ref<ComposerDraft | null>(null)
+const localDraftSavedAt = ref('')
+const revisions = ref<TopicRevision[]>([])
+const revisionsOpen = ref(false)
+const revisionsLoading = ref(false)
+const revisionsError = ref('')
+const restoringRevisionId = ref<number | null>(null)
 let resizeStartY = 0
 let resizeStartHeight = 0
 let previewTimer: ReturnType<typeof setTimeout> | undefined
+let localDraftTimer: ReturnType<typeof setTimeout> | undefined
 let uploadSequence = 0
+let skipDraftOnUnmount = false
 
 const composerStyle = computed(() => composerHeight.value === null
   ? undefined
@@ -93,11 +110,16 @@ const composerStyle = computed(() => composerHeight.value === null
 const draftStatus = computed(() => {
   if (uploadingImages.value > 0) return `正在上传 ${uploadingImages.value} 张图片…`
   if (busy.value) return '正在保存…'
+  if (localDraftSavedAt.value) return `已在本机暂存 ${localDraftSavedAt.value}`
   return uploadMessage.value || '可保存为草稿'
 })
 
 watch(form, () => {
-  emit('dirty-change', JSON.stringify(form) !== initialSnapshot)
+  const dirty = JSON.stringify(form) !== initialSnapshot
+  emit('dirty-change', dirty)
+  clearTimeout(localDraftTimer)
+  if (!dirty || !import.meta.client) return
+  localDraftTimer = setTimeout(persistLocalDraft, 700)
 }, { deep: true })
 
 watch(() => props.collapsed, (collapsed) => {
@@ -120,6 +142,104 @@ async function updatePreview() {
 function schedulePreview() {
   clearTimeout(previewTimer)
   previewTimer = setTimeout(updatePreview, 220)
+}
+
+function draftFields(): ComposerDraftFields {
+  return {
+    title: form.title,
+    slug: form.slug,
+    excerpt: form.excerpt,
+    categorySlug: form.categorySlug,
+    tags: [...form.tags],
+    contentMarkdown: form.contentMarkdown,
+    externalUrl: form.externalUrl,
+    isPinned: form.isPinned,
+    publishedAt: form.publishedAt,
+  }
+}
+
+function persistLocalDraft() {
+  if (!import.meta.client || JSON.stringify(form) === initialSnapshot) return
+  const savedAt = new Date()
+  localStorage.setItem(localDraftKey, serializeComposerDraft(draftFields(), savedAt))
+  localDraftSavedAt.value = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(savedAt)
+}
+
+function clearLocalDraft(afterSuccessfulSave = false) {
+  clearTimeout(localDraftTimer)
+  if (afterSuccessfulSave) skipDraftOnUnmount = true
+  if (import.meta.client) localStorage.removeItem(localDraftKey)
+  localDraftSavedAt.value = ''
+  recoveryDraft.value = null
+}
+
+function restoreLocalDraft() {
+  if (!recoveryDraft.value) return
+  Object.assign(form, recoveryDraft.value.fields)
+  localDraftSavedAt.value = new Intl.DateTimeFormat('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(recoveryDraft.value.savedAt))
+  recoveryDraft.value = null
+  schedulePreview()
+}
+
+function discardLocalDraft() {
+  clearLocalDraft()
+}
+
+function formatRevisionDate(value: string): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function revisionSummary(revision: TopicRevision): string {
+  return revision.contentMarkdown.replace(/\s+/g, ' ').trim().slice(0, 88) || '空正文'
+}
+
+async function openRevisions() {
+  if (!props.topic) return
+  revisionsOpen.value = true
+  revisionsLoading.value = true
+  revisionsError.value = ''
+  try {
+    revisions.value = await $fetch<TopicRevision[]>(`/api/studio/topics/${props.topic.id}/revisions`)
+  }
+  catch (error: any) {
+    revisionsError.value = error?.data?.statusMessage || '历史版本加载失败'
+  }
+  finally {
+    revisionsLoading.value = false
+  }
+}
+
+async function restoreRevision(revision: TopicRevision) {
+  if (!props.topic || !window.confirm(`确定恢复“${revision.title}”这个版本吗？当前版本会自动保留在历史记录中。`)) return
+  restoringRevisionId.value = revision.id
+  revisionsError.value = ''
+  try {
+    const restored = await $fetch<StudioTopic>(
+      `/api/studio/topics/${props.topic.id}/revisions/${revision.id}`,
+      { method: 'POST' },
+    )
+    clearLocalDraft(true)
+    emit('dirty-change', false)
+    emit('saved', restored)
+  }
+  catch (error: any) {
+    revisionsError.value = error?.data?.statusMessage || '恢复历史版本失败'
+  }
+  finally {
+    restoringRevisionId.value = null
+  }
 }
 
 async function applyTool(action: MarkdownAction) {
@@ -383,6 +503,7 @@ async function save(status: 'draft' | 'published') {
       method: props.topic ? 'PUT' : 'POST',
       body: { ...form, publishedAt, status },
     })
+    clearLocalDraft(true)
     emit('dirty-change', false)
     emit('saved', saved)
   }
@@ -395,12 +516,22 @@ async function save(status: 'draft' | 'published') {
 }
 
 onMounted(() => {
+  const storedDraft = localStorage.getItem(localDraftKey)
+  const parsedDraft = parseComposerDraft(storedDraft, props.topic?.updatedAt)
+  if (parsedDraft && JSON.stringify(parsedDraft.fields) !== initialSnapshot) {
+    recoveryDraft.value = parsedDraft
+  }
+  else if (storedDraft) {
+    localStorage.removeItem(localDraftKey)
+  }
   updatePreview()
   window.addEventListener('keydown', handleWindowKeydown)
 })
 
 onBeforeUnmount(() => {
   clearTimeout(previewTimer)
+  clearTimeout(localDraftTimer)
+  if (!skipDraftOnUnmount) persistLocalDraft()
   window.removeEventListener('keydown', handleWindowKeydown)
   document.documentElement.classList.remove('composer-fullscreen')
 })
@@ -458,6 +589,14 @@ onBeforeUnmount(() => {
       <div v-if="errorMessage" class="form-alert composer-alert" role="alert">{{ errorMessage }}</div>
       <div v-else-if="!categories.length" class="form-alert composer-alert" role="alert">
         还没有可用板块，请先前往板块管理创建一个板块。
+      </div>
+      <div v-if="recoveryDraft" class="composer-recovery" role="status">
+        <div>
+          <strong>发现未保存的本机草稿</strong>
+          <span>暂存于 {{ formatRevisionDate(recoveryDraft.savedAt) }}，不会自动覆盖当前内容。</span>
+        </div>
+        <button class="btn btn-primary" type="button" @click="restoreLocalDraft">恢复</button>
+        <button class="btn" type="button" @click="discardLocalDraft">丢弃</button>
       </div>
 
       <div
@@ -578,6 +717,35 @@ onBeforeUnmount(() => {
         </section>
       </div>
 
+      <aside v-if="revisionsOpen" class="composer-revisions" aria-label="帖子历史版本">
+        <header>
+          <div><strong>历史版本</strong><span>恢复前会保留当前版本</span></div>
+          <button type="button" aria-label="关闭历史版本" @click="revisionsOpen = false">×</button>
+        </header>
+        <div v-if="revisionsLoading" class="composer-revisions__empty">正在加载…</div>
+        <div v-else-if="revisionsError" class="composer-revisions__empty" role="alert">{{ revisionsError }}</div>
+        <div v-else-if="!revisions.length" class="composer-revisions__empty">还没有历史版本。第一次修改并保存后会自动出现。</div>
+        <ol v-else class="composer-revisions__list">
+          <li v-for="revision in revisions" :key="revision.id">
+            <div class="composer-revisions__meta">
+              <strong>{{ revision.title }}</strong>
+              <span>{{ formatRevisionDate(revision.createdAt) }} · {{ revision.status === 'published' ? '已发布' : '草稿' }}</span>
+            </div>
+            <p>{{ revisionSummary(revision) }}</p>
+            <div class="composer-revisions__tags">
+              <span>{{ revision.categorySlug }}</span>
+              <span v-for="tag in revision.tags" :key="tag">#{{ tag }}</span>
+            </div>
+            <button
+              class="btn"
+              type="button"
+              :disabled="restoringRevisionId !== null"
+              @click="restoreRevision(revision)"
+            >{{ restoringRevisionId === revision.id ? '正在恢复…' : '恢复此版本' }}</button>
+          </li>
+        </ol>
+      </aside>
+
       <footer v-show="!collapsed" class="composer-footer">
         <div class="composer-mobile-tabs" role="tablist" aria-label="编辑模式">
           <button
@@ -598,6 +766,9 @@ onBeforeUnmount(() => {
 
         <div class="submit-panel">
           <span class="draft-status" aria-live="polite">{{ draftStatus }}</span>
+          <button v-if="topic" class="btn" type="button" :disabled="busy" @click="openRevisions">
+            历史版本
+          </button>
           <button class="btn" type="button" :disabled="busy || uploadingImages > 0 || !categories.length" @click="save('draft')">
             保存草稿
           </button>

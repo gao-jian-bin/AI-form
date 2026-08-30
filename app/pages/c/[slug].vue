@@ -11,7 +11,10 @@ const { data: topicPage, status, error, refresh } = await useFetch<TopicPage>('/
   default: () => ({ items: [], page: 1, pageSize: 30, total: 0, totalPages: 0 }),
 })
 const category = computed(() => categories.value.find(item => item.slug === slug.value))
-useCanonical(() => route.path)
+if (!category.value) {
+  throw createError({ statusCode: 404, statusMessage: '板块不存在' })
+}
+useCanonical(() => Number(page.value) > 1 ? `/c/${slug.value}?page=${page.value}` : `/c/${slug.value}`)
 
 useSeoMeta({
   title: () => category.value?.name || '内容板块',

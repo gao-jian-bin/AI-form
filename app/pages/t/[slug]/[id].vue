@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import type { ForumCategory, ForumTag, TopicDetail, TopicPage } from '~/types/forum'
 import { formatDottedDate } from '~/utils/date-format'
+import { serializeJsonLd } from '~/utils/json-ld'
 
 const route = useRoute()
 const id = computed(() => Number(route.params.id))
 const { data: topic, error, refresh } = await useFetch<TopicDetail>(() => `/api/topics/${id.value}`)
-useCanonical(() => route.path)
 
 if (error.value || !topic.value) {
   throw createError({ statusCode: 404, statusMessage: '主题不存在' })
+}
+
+const canonicalPath = computed(() => `/t/${encodeURIComponent(topic.value!.slug)}/${topic.value!.id}`)
+if (String(route.params.slug) !== topic.value.slug) {
+  await navigateTo(canonicalPath.value, { redirectCode: 301, replace: true })
 }
 
 const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
@@ -36,6 +41,25 @@ useSeoMeta({
   ogDescription: () => topic.value?.excerpt || '',
   ogType: 'article',
 })
+
+const requestUrl = useRequestURL()
+useCanonical(() => canonicalPath.value)
+useHead(() => ({
+  script: [{
+    key: 'topic-json-ld',
+    type: 'application/ld+json',
+    innerHTML: serializeJsonLd({
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: topic.value?.title,
+      description: topic.value?.excerpt,
+      datePublished: topic.value?.publishedAt || topic.value?.createdAt,
+      dateModified: topic.value?.updatedAt,
+      mainEntityOfPage: new URL(canonicalPath.value, requestUrl.origin).href,
+      author: { '@type': 'Person', name: '站长' },
+    }),
+  }],
+}))
 
 onMounted(() => {
   $fetch(`/api/topics/${id.value}/view`, { method: 'POST' }).catch(() => undefined)

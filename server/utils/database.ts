@@ -621,6 +621,14 @@ export function listPublicTopics(
   return rows.map(mapTopic)
 }
 
+export function listAllPublicTopics(db: Database.Database): TopicRecord[] {
+  const rows = db.prepare(`${TOPIC_SELECT}
+    WHERE topics.status = 'published'
+    ORDER BY topics.is_pinned DESC, topics.published_at DESC, topics.id DESC
+  `).all() as RawTopicRow[]
+  return rows.map(mapTopic)
+}
+
 export function listPublicTopicPage(
   db: Database.Database,
   filters: PublicTopicFilters & { page?: number; pageSize?: number },
@@ -655,6 +663,11 @@ export function listStudioTopics(db: Database.Database): TopicRecord[] {
     ORDER BY topics.updated_at DESC, topics.id DESC
   `).all() as RawTopicRow[]
   return rows.map(mapTopic)
+}
+
+export function listTopicMarkdownSources(db: Database.Database): string[] {
+  return (db.prepare('SELECT content_markdown FROM topics').all() as Array<{ content_markdown: string }>)
+    .map(row => row.content_markdown)
 }
 
 export function getPublicTopic(db: Database.Database, id: number): TopicRecord | null {

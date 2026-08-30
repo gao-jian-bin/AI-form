@@ -11,6 +11,9 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#f5f7fa' },
         { name: 'description', content: '收录 ChatGPT 技巧、AI 学习框架与实用工具。' },
       ],
+      link: [
+        { rel: 'alternate', type: 'application/atom+xml', title: 'AI 知识论坛订阅', href: '/feed.xml' },
+      ],
     },
   },
   runtimeConfig: {

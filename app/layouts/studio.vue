@@ -3,6 +3,7 @@ const route = useRoute()
 
 const isCategoryRoute = computed(() => route.path.startsWith('/studio/categories'))
 const isTagRoute = computed(() => route.path.startsWith('/studio/tags'))
+const isUploadRoute = computed(() => route.path.startsWith('/studio/uploads'))
 </script>
 
 <template>
@@ -14,9 +15,10 @@ const isTagRoute = computed(() => route.path.startsWith('/studio/tags'))
           <span>内容工作台</span>
         </NuxtLink>
         <nav class="studio-nav" aria-label="工作台导航">
-          <NuxtLink to="/studio" :class="{ active: !isCategoryRoute && !isTagRoute && route.path !== '/studio/sign-in' }">帖子管理</NuxtLink>
+          <NuxtLink to="/studio" :class="{ active: !isCategoryRoute && !isTagRoute && !isUploadRoute && route.path !== '/studio/sign-in' }">帖子管理</NuxtLink>
           <NuxtLink to="/studio/categories" :class="{ active: isCategoryRoute }">板块管理</NuxtLink>
           <NuxtLink to="/studio/tags" :class="{ active: isTagRoute }">标签管理</NuxtLink>
+          <NuxtLink to="/studio/uploads" :class="{ active: isUploadRoute }">图片管理</NuxtLink>
         </nav>
       </div>
       <NuxtLink to="/" class="button button-quiet">查看网站 ↗</NuxtLink>

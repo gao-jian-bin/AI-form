@@ -9,7 +9,7 @@ const { data: topicPage, status, error, refresh } = await useFetch<TopicPage>('/
   query: { page },
   default: () => ({ items: [], page: 1, pageSize: 30, total: 0, totalPages: 0 }),
 })
-useCanonical(() => '/')
+useCanonical(() => Number(page.value) > 1 ? `/?page=${page.value}` : '/')
 
 useSeoMeta({
   title: '最新帖子',

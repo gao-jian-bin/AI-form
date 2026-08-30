@@ -7,6 +7,7 @@ import {
 import { requireAdmin } from '../../../utils/http'
 import {
   MAX_IMAGE_BYTES,
+  UploadQuotaExceededError,
   detectImageType,
   storeUploadedImage,
 } from '../../../utils/uploads'
@@ -41,6 +42,9 @@ export default defineEventHandler(async (event) => {
     setResponseStatus(event, 201)
     return storedImage
   } catch (error) {
+    if (error instanceof UploadQuotaExceededError) {
+      throw createError({ statusCode: 507, statusMessage: error.message })
+    }
     console.error(error)
     throw createError({ statusCode: 500, statusMessage: '图片保存失败，请稍后重试' })
   }

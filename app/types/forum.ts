@@ -67,3 +67,17 @@ export interface TopicRevision {
   tags: string[]
   createdAt: string
 }
+
+export interface UploadInventoryItem {
+  path: string
+  url: string
+  size: number
+  modifiedAt: string
+  referenced: boolean
+}
+
+export interface UploadInventory {
+  items: UploadInventoryItem[]
+  usedBytes: number
+  quotaBytes: number
+}

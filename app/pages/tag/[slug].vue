@@ -9,6 +9,9 @@ const { data: tags } = await useFetch<ForumTag[]>('/api/tags', { default: () => 
 const slugMatch = tags.value.find(item => item.slug.toLocaleLowerCase() === requestedTag.toLocaleLowerCase())
 const legacyNameMatch = tags.value.find(item => item.name.toLocaleLowerCase() === requestedTag.toLocaleLowerCase())
 const tag = slugMatch || legacyNameMatch
+if (!tag) {
+  throw createError({ statusCode: 404, statusMessage: '标签不存在' })
+}
 if (tag && !slugMatch) {
   await navigateTo(`/tag/${encodeURIComponent(tag.slug)}`, { redirectCode: 301, replace: true })
 }
@@ -16,7 +19,7 @@ const { data: topicPage, status, error, refresh } = await useFetch<TopicPage>('/
   query: { tag: tag?.slug || requestedTag, page },
   default: () => ({ items: [], page: 1, pageSize: 30, total: 0, totalPages: 0 }),
 })
-useCanonical(() => route.path)
+useCanonical(() => Number(page.value) > 1 ? `/tag/${tag.slug}?page=${page.value}` : `/tag/${tag.slug}`)
 
 useSeoMeta({
   title: () => `#${tag?.name || requestedTag}`,
