@@ -3,10 +3,14 @@ import type Database from 'better-sqlite3'
 import {
   createCategory,
   createForumDatabase,
+  createTag,
   deleteCategory,
+  deleteTag,
   ensureBaseCategories,
   getStudioCategory,
+  getStudioTag,
   getPublicTopic,
+  getStudioTopic,
   listCategories,
   listPublicTags,
   listPublicTopics,
@@ -16,6 +20,7 @@ import {
   recordTopicView,
   saveTopic,
   updateCategory,
+  updateTag,
 } from '../server/utils/database'
 
 describe('forum database', () => {
@@ -399,7 +404,46 @@ describe('forum database', () => {
       expect.objectContaining({ name: '共用标签', topicCount: 2 }),
       expect.objectContaining({ name: '草稿标签', topicCount: 1 }),
       expect.objectContaining({ name: 'Prompt', topicCount: 1 }),
+      expect.objectContaining({ name: '孤立标签', topicCount: 0 }),
     ])
-    expect(listStudioTags(db).some(tag => tag.name === '孤立标签')).toBe(false)
+  })
+
+  it('creates, reads, renames, and deletes administrator tags without losing topic data', () => {
+    const orphan = createTag(db, { name: 'AI 搜索' })
+    expect(getStudioTag(db, orphan.id)).toEqual(expect.objectContaining({
+      name: 'AI 搜索',
+      topicCount: 0,
+    }))
+    expect(listStudioTags(db)).toContainEqual(expect.objectContaining({ name: 'AI 搜索' }))
+
+    const topic = saveTopic(db, {
+      title: '标签关联帖',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'draft',
+      tags: ['旧标签'],
+      isPinned: false,
+      externalUrl: null,
+    })
+    const linkedTag = listStudioTags(db).find(tag => tag.name === '旧标签')!
+    expect(updateTag(db, linkedTag.id, { name: '新标签' })).toEqual(expect.objectContaining({
+      id: linkedTag.id,
+      name: '新标签',
+      topicCount: 1,
+    }))
+    expect(getStudioTopic(db, topic.id)?.tags).toEqual(['新标签'])
+
+    expect(deleteTag(db, linkedTag.id)).toBe(true)
+    expect(getStudioTag(db, linkedTag.id)).toBeNull()
+    expect(getStudioTopic(db, topic.id)?.tags).toEqual([])
+    expect(deleteTag(db, linkedTag.id)).toBe(false)
+  })
+
+  it('rejects duplicate administrator tag names case-insensitively', () => {
+    const first = createTag(db, { name: 'Prompt' })
+    expect(() => createTag(db, { name: 'prompt' })).toThrow('标签名称已被使用')
+    const second = createTag(db, { name: '工作流' })
+    expect(() => updateTag(db, second.id, { name: 'PROMPT' })).toThrow('标签名称已被使用')
+    expect(getStudioTag(db, first.id)?.name).toBe('Prompt')
   })
 })

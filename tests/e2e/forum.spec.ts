@@ -8,6 +8,9 @@ test('category admin API rejects public requests', async ({ request }) => {
 test('studio tag API rejects public requests', async ({ request }) => {
   const response = await request.get('/api/studio/tags')
   expect(response.status()).toBe(401)
+
+  const createResponse = await request.post('/api/studio/tags', { data: { name: '未授权标签' } })
+  expect(createResponse.status()).toBe(401)
 })
 
 test('image upload API is private and serves uploaded image bytes publicly', async ({ request }) => {
@@ -251,6 +254,30 @@ test('composer renders quotes and keeps long editor panes independently scrollab
   await composer.getByRole('button', { name: '引用' }).click()
   await expect(editor).toHaveValue('正文\n\n> 引用内容')
   await expect(composer.locator('.d-editor-preview blockquote')).toContainText('引用内容')
+
+  await editor.fill('')
+  await composer.getByRole('button', { name: '有序列表' }).click()
+  await expect(editor).toHaveValue('1. 列表项')
+  await editor.pressSequentially('第一项')
+  await expect(editor).toHaveValue('1. 第一项')
+  await editor.press('Enter')
+  await expect(editor).toHaveValue('1. 第一项\n2. ')
+  await editor.pressSequentially('第二项')
+  await editor.press('Enter')
+  await expect(editor).toHaveValue('1. 第一项\n2. 第二项\n3. ')
+  await editor.press('Enter')
+  await expect(editor).toHaveValue('1. 第一项\n2. 第二项\n')
+  await expect(composer.locator('.d-editor-preview ol')).toContainText('第一项')
+
+  const fencedCode = '```shell\n1. command\n```'
+  const commandEnd = fencedCode.indexOf('\n```', 3)
+  await editor.fill(fencedCode)
+  await editor.evaluate((element, caret) => {
+    element.focus()
+    element.setSelectionRange(caret, caret)
+  }, commandEnd)
+  await editor.press('Enter')
+  await expect(editor).toHaveValue('```shell\n1. command\n\n```')
 
   const longText = Array.from({ length: 220 }, (_, index) => `第 ${index + 1} 行滚动内容`).join('\n\n')
   await editor.fill(longText)
@@ -635,4 +662,49 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   const emptyRow = page.getByRole('row').filter({ hasText: emptySlug })
   await emptyRow.getByRole('button', { name: '删除' }).click()
   await expect(page.getByText(emptySlug, { exact: true })).toHaveCount(0)
+})
+
+test('owner can manage tags, select one, and the chooser closes after selection', async ({ page }) => {
+  const originalName = `端到端标签 ${Date.now()}`
+  const renamedTag = `${originalName} 已改`
+  const topicTitle = `标签管理验收 ${Date.now()}`
+
+  await page.goto('/studio')
+  await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
+  await page.getByRole('button', { name: '进入工作台' }).click()
+  await expect(page).toHaveURL(/\/studio$/)
+  const missingUpdate = await page.request.put('/api/studio/tags/999999999', {
+    data: { name: '不存在的标签' },
+  })
+  expect(missingUpdate.status()).toBe(404)
+  await page.getByRole('link', { name: '标签管理' }).click()
+  await page.getByRole('link', { name: '＋ 新建标签' }).click()
+  await page.getByLabel('标签名称').fill(originalName)
+  await page.getByRole('button', { name: '创建标签' }).click()
+
+  let row = page.getByRole('row').filter({ hasText: originalName })
+  await expect(row).toBeVisible()
+  await expect(row).toContainText('0')
+  await row.getByRole('link', { name: '编辑' }).click()
+  await page.getByLabel('标签名称').fill(renamedTag)
+  await page.getByRole('button', { name: '保存修改' }).click()
+  await expect(page.getByRole('row').filter({ hasText: renamedTag })).toBeVisible()
+
+  await page.getByRole('link', { name: '帖子管理' }).click()
+  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  const composer = page.getByRole('dialog', { name: '创建新帖子' })
+  await composer.getByRole('textbox', { name: '标题', exact: true }).fill(topicTitle)
+  await composer.getByLabel('正文 · Markdown').fill('用于验收标签管理。')
+  await composer.getByRole('button', { name: '选择标签' }).click()
+  await composer.locator(`[data-tag-option="${renamedTag}"]`).click()
+  await expect(composer.getByLabel('搜索或创建标签')).toHaveCount(0)
+  await expect(composer.getByRole('button', { name: '选择标签' })).toBeFocused()
+  await composer.getByRole('button', { name: '保存草稿' }).click()
+
+  await page.getByRole('link', { name: '标签管理' }).click()
+  row = page.getByRole('row').filter({ hasText: renamedTag })
+  await expect(row).toContainText('1')
+  page.once('dialog', dialog => dialog.accept())
+  await row.getByRole('button', { name: '删除' }).click()
+  await expect(page.getByRole('row').filter({ hasText: renamedTag })).toHaveCount(0)
 })

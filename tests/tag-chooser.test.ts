@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import TagChooser from '../app/components/TagChooser.vue'
 
 const options = [
@@ -9,9 +9,14 @@ const options = [
   { id: 3, name: '图片工具', slug: 'image-tools', topicCount: 1 },
 ]
 
+afterEach(() => document.body.replaceChildren())
+
 describe('TagChooser', () => {
   it('lists known tags and adds a selected option without duplicating selected names', async () => {
-    const wrapper = mount(TagChooser, { props: { modelValue: ['Prompt'], options } })
+    const wrapper = mount(TagChooser, {
+      attachTo: document.body,
+      props: { modelValue: ['Prompt'], options },
+    })
 
     await wrapper.get('[aria-label="选择标签"]').trigger('click')
 
@@ -20,12 +25,19 @@ describe('TagChooser', () => {
     await wrapper.get('[aria-label="搜索或创建标签"]').setValue('prompt')
     expect(wrapper.find('[data-create-tag]').exists()).toBe(false)
     await wrapper.get('[aria-label="搜索或创建标签"]').setValue('')
-    await wrapper.get('[data-tag-option="工作流"]').trigger('click')
+    const option = wrapper.get('[data-tag-option="工作流"]')
+    option.element.focus()
+    await option.trigger('click')
     expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual(['Prompt', '工作流'])
+    expect(wrapper.find('.tag-chooser__menu').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[aria-label="选择标签"]').element)
   })
 
   it('creates an unknown tag from the search value', async () => {
-    const wrapper = mount(TagChooser, { props: { modelValue: ['Prompt'], options } })
+    const wrapper = mount(TagChooser, {
+      attachTo: document.body,
+      props: { modelValue: ['Prompt'], options },
+    })
     await wrapper.get('[aria-label="选择标签"]').trigger('click')
     await wrapper.get('[aria-label="搜索或创建标签"]').setValue('新标签')
 
@@ -73,7 +85,10 @@ describe('TagChooser', () => {
   })
 
   it('moves through known tags with arrow keys, selects with Enter, and closes with Escape', async () => {
-    const wrapper = mount(TagChooser, { props: { modelValue: ['Prompt'], options } })
+    const wrapper = mount(TagChooser, {
+      attachTo: document.body,
+      props: { modelValue: ['Prompt'], options },
+    })
     await wrapper.get('[aria-label="选择标签"]').trigger('click')
     const search = wrapper.get('[aria-label="搜索或创建标签"]')
 
@@ -81,10 +96,14 @@ describe('TagChooser', () => {
     await search.trigger('keydown', { key: 'ArrowDown' })
     await search.trigger('keydown', { key: 'ArrowUp' })
     expect(wrapper.get('[data-tag-option="工作流"]').classes()).toContain('is-active')
+    search.element.focus()
     await search.trigger('keydown', { key: 'Enter' })
     expect(wrapper.emitted('update:modelValue')?.at(-1)?.[0]).toEqual(['Prompt', '工作流'])
+    expect(wrapper.find('.tag-chooser__menu').exists()).toBe(false)
+    expect(document.activeElement).toBe(wrapper.get('[aria-label="选择标签"]').element)
 
-    await search.trigger('keydown', { key: 'Escape' })
+    await wrapper.get('[aria-label="选择标签"]').trigger('click')
+    await wrapper.get('[aria-label="搜索或创建标签"]').trigger('keydown', { key: 'Escape' })
     expect(wrapper.find('.tag-chooser__menu').exists()).toBe(false)
   })
 })

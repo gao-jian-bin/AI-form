@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyMarkdownAction, insertMarkdownBlock } from '../app/utils/markdown-editor'
+import { applyMarkdownAction, continueOrderedList, insertMarkdownBlock } from '../app/utils/markdown-editor'
 
 describe('applyMarkdownAction', () => {
   it('wraps the current selection in bold markers and keeps the inner text selected', () => {
@@ -120,5 +120,63 @@ describe('insertMarkdownBlock', () => {
       selectionStart: 13,
       selectionEnd: 13,
     })
+  })
+})
+
+describe('continueOrderedList', () => {
+  it('continues an ordered list with the next source number', () => {
+    expect(continueOrderedList('1. first', 8, 8)).toEqual({
+      value: '1. first\n2. ',
+      selectionStart: 12,
+      selectionEnd: 12,
+    })
+  })
+
+  it('preserves indentation and list delimiter while incrementing multi-digit numbers', () => {
+    expect(continueOrderedList('  9) item', 9, 9)).toEqual({
+      value: '  9) item\n  10) ',
+      selectionStart: 16,
+      selectionEnd: 16,
+    })
+  })
+
+  it('splits a list item at the caret and moves its suffix to the next item', () => {
+    expect(continueOrderedList('3. abcdef', 6, 6)).toEqual({
+      value: '3. abc\n4. def',
+      selectionStart: 10,
+      selectionEnd: 10,
+    })
+  })
+
+  it('exits the ordered list when Enter is pressed on an empty item', () => {
+    expect(continueOrderedList('1. first\n2. ', 12, 12)).toEqual({
+      value: '1. first\n',
+      selectionStart: 9,
+      selectionEnd: 9,
+    })
+  })
+
+  it('leaves normal text and range selections to the browser', () => {
+    expect(continueOrderedList('正常文本', 4, 4)).toBeNull()
+    expect(continueOrderedList('1. selected', 3, 11)).toBeNull()
+  })
+
+  it('leaves ordered-looking lines inside fenced code blocks unchanged', () => {
+    const fenced = '```shell\n1. command\n```'
+    const commandEnd = fenced.indexOf('\n```', 3)
+    expect(continueOrderedList(fenced, commandEnd, commandEnd)).toBeNull()
+
+    const listAfterFence = `${fenced}\n1. real item`
+    expect(continueOrderedList(listAfterFence, listAfterFence.length, listAfterFence.length))
+      .toEqual({
+        value: `${listAfterFence}\n2. `,
+        selectionStart: listAfterFence.length + 4,
+        selectionEnd: listAfterFence.length + 4,
+      })
+  })
+
+  it('does not intercept Enter before or inside an ordered-list marker', () => {
+    expect(continueOrderedList('1. item', 0, 0)).toBeNull()
+    expect(continueOrderedList('1. item', 2, 2)).toBeNull()
   })
 })

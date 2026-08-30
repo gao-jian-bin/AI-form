@@ -100,6 +100,57 @@ export function insertMarkdownBlock(
   return replaceBlock(value, start, end, block, block.length, 0)
 }
 
+function isInsideFencedCode(value: string, lineStart: number): boolean {
+  let fenceCharacter = ''
+  let fenceLength = 0
+
+  for (const line of value.slice(0, lineStart).split('\n')) {
+    if (!fenceCharacter) {
+      const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/)
+      if (!opening) continue
+      const marker = opening[1]!
+      if (marker[0] === '`' && opening[2]?.includes('`')) continue
+      fenceCharacter = marker[0]!
+      fenceLength = marker.length
+      continue
+    }
+
+    const closing = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/)
+    const marker = closing?.[1]
+    if (marker?.[0] === fenceCharacter && marker.length >= fenceLength) {
+      fenceCharacter = ''
+      fenceLength = 0
+    }
+  }
+
+  return Boolean(fenceCharacter)
+}
+
+export function continueOrderedList(
+  value: string,
+  start: number,
+  end: number,
+): MarkdownEditResult | null {
+  if (start !== end) return null
+
+  const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1
+  const nextLineBreak = value.indexOf('\n', start)
+  const lineEnd = nextLineBreak === -1 ? value.length : nextLineBreak
+  const line = value.slice(lineStart, lineEnd)
+  const match = line.match(/^([ \t]{0,3})(\d{1,9})([.)])[ \t]+(.*)$/)
+  if (!match || isInsideFencedCode(value, lineStart)) return null
+
+  const [, indentation, number, delimiter, content] = match
+  const contentStart = lineStart + line.length - (content?.length ?? 0)
+  if (start < contentStart) return null
+  if (!content?.trim()) {
+    return replaceSelection(value, lineStart, lineEnd, '', 0, 0)
+  }
+
+  const nextMarker = `\n${indentation}${Number(number) + 1}${delimiter} `
+  return replaceSelection(value, start, end, nextMarker, nextMarker.length, 0)
+}
+
 function wrapSelection(
   value: string,
   start: number,

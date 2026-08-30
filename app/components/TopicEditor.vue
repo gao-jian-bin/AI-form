@@ -5,6 +5,7 @@ import { clampComposerHeight } from '~/utils/composer-layout'
 import {
   applyMarkdownAction,
   COMPOSER_TOOLS,
+  continueOrderedList,
   insertMarkdownBlock,
   type MarkdownAction,
 } from '~/utils/markdown-editor'
@@ -275,7 +276,32 @@ function handleImageDrop(event: DragEvent) {
   void uploadImages(files)
 }
 
-function handleEditorShortcut(event: KeyboardEvent) {
+async function handleEditorShortcut(event: KeyboardEvent) {
+  if (event.isComposing) return
+  if (
+    event.key === 'Enter'
+    && !event.ctrlKey
+    && !event.metaKey
+    && !event.altKey
+    && !event.shiftKey
+  ) {
+    const input = textarea.value
+    if (!input) return
+    const edit = continueOrderedList(
+      form.contentMarkdown,
+      input.selectionStart,
+      input.selectionEnd,
+    )
+    if (!edit) return
+    event.preventDefault()
+    form.contentMarkdown = edit.value
+    schedulePreview()
+    await nextTick()
+    input.focus()
+    input.setSelectionRange(edit.selectionStart, edit.selectionEnd)
+    return
+  }
+
   if (!(event.metaKey || event.ctrlKey)) return
   const key = event.key.toLocaleLowerCase()
   const action = key === 'b' ? 'bold' : key === 'i' ? 'italic' : key === 'k' ? 'link' : null

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseCategoryPayload, parseTopicPayload } from '../server/utils/validation'
+import { parseCategoryPayload, parseTagPayload, parseTopicPayload } from '../server/utils/validation'
 
 describe('parseTopicPayload', () => {
   it('normalizes a valid editor payload into the database contract', () => {
@@ -139,5 +139,16 @@ describe('parseCategoryPayload', () => {
     [{ name: '板块', slug: 'ai-image', description: '', color: '#2563eb', position: -1 }, '排序不能小于 0'],
   ])('rejects invalid category values', (payload, message) => {
     expect(() => parseCategoryPayload(payload, 'create')).toThrow(message)
+  })
+})
+
+describe('parseTagPayload', () => {
+  it('normalizes a tag name for create and update requests', () => {
+    expect(parseTagPayload({ name: '  AI 搜索  ' })).toEqual({ name: 'AI 搜索' })
+  })
+
+  it('rejects empty and overlong tag names', () => {
+    expect(() => parseTagPayload({ name: '   ' })).toThrow('标签名称不能为空')
+    expect(() => parseTagPayload({ name: 'x'.repeat(61) })).toThrow('标签名称不能超过 60 个字符')
   })
 })

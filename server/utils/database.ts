@@ -52,6 +52,10 @@ export interface ForumTag {
   topicCount: number
 }
 
+export interface TagInput {
+  name: string
+}
+
 export interface TopicRecord {
   id: number
   title: string
@@ -388,8 +392,8 @@ export function listStudioTags(db: Database.Database): ForumTag[] {
   const tags = db.prepare(`
     SELECT tags.id, tags.name, tags.slug, COUNT(DISTINCT topics.id) AS topic_count
     FROM tags
-    JOIN topic_tags ON topic_tags.tag_id = tags.id
-    JOIN topics ON topics.id = topic_tags.topic_id
+    LEFT JOIN topic_tags ON topic_tags.tag_id = tags.id
+    LEFT JOIN topics ON topics.id = topic_tags.topic_id
     GROUP BY tags.id
   `).all().map((row: any) => ({
     id: row.id,
@@ -399,6 +403,74 @@ export function listStudioTags(db: Database.Database): ForumTag[] {
   }))
   return tags.sort((a: ForumTag, b: ForumTag) =>
     b.topicCount - a.topicCount || a.name.localeCompare(b.name, 'zh-CN'))
+}
+
+export function getStudioTag(db: Database.Database, id: number): ForumTag | null {
+  const row = db.prepare(`
+    SELECT tags.id, tags.name, tags.slug, COUNT(DISTINCT topics.id) AS topic_count
+    FROM tags
+    LEFT JOIN topic_tags ON topic_tags.tag_id = tags.id
+    LEFT JOIN topics ON topics.id = topic_tags.topic_id
+    WHERE tags.id = ?
+    GROUP BY tags.id
+  `).get(id) as any
+  return row
+    ? { id: row.id, name: row.name, slug: row.slug, topicCount: row.topic_count }
+    : null
+}
+
+function assertUniqueTag(db: Database.Database, name: string, exceptId?: number): void {
+  const match = db.prepare(`
+    SELECT id FROM tags
+    WHERE name = ? COLLATE NOCASE AND (? IS NULL OR id != ?)
+  `).get(name, exceptId ?? null, exceptId ?? null)
+  if (match) throw new Error('标签名称已被使用')
+}
+
+function uniqueTagSlug(db: Database.Database, name: string): string {
+  const baseSlug = slugifyTopic(name)
+  const slugExists = db.prepare('SELECT 1 FROM tags WHERE slug = ?')
+  if (!slugExists.get(baseSlug)) return baseSlug
+
+  const digest = createHash('sha256').update(name).digest('hex').slice(0, 8)
+  let candidate = `${baseSlug}-${digest}`
+  let suffix = 2
+  while (slugExists.get(candidate)) {
+    candidate = `${baseSlug}-${digest}-${suffix}`
+    suffix += 1
+  }
+  return candidate
+}
+
+export function createTag(db: Database.Database, input: TagInput): ForumTag {
+  const name = input.name.trim()
+  if (!name) throw new Error('标签名称不能为空')
+  const id = db.transaction(() => {
+    assertUniqueTag(db, name)
+    const result = db.prepare('INSERT INTO tags (name, slug) VALUES (?, ?)')
+      .run(name, uniqueTagSlug(db, name))
+    return Number(result.lastInsertRowid)
+  })()
+  const tag = getStudioTag(db, id)
+  if (!tag) throw new Error('创建标签失败')
+  return tag
+}
+
+export function updateTag(db: Database.Database, id: number, input: TagInput): ForumTag {
+  const name = input.name.trim()
+  if (!name) throw new Error('标签名称不能为空')
+  db.transaction(() => {
+    if (!db.prepare('SELECT id FROM tags WHERE id = ?').get(id)) throw new Error('标签不存在')
+    assertUniqueTag(db, name, id)
+    db.prepare('UPDATE tags SET name = ? WHERE id = ?').run(name, id)
+  })()
+  const tag = getStudioTag(db, id)
+  if (!tag) throw new Error('标签不存在')
+  return tag
+}
+
+export function deleteTag(db: Database.Database, id: number): boolean {
+  return db.prepare('DELETE FROM tags WHERE id = ?').run(id).changes > 0
 }
 
 export function listPublicTopics(
@@ -535,19 +607,14 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
     }
 
     db.prepare('DELETE FROM topic_tags WHERE topic_id = ?').run(topicId)
-    const insertTag = db.prepare('INSERT INTO tags (name, slug) VALUES (?, ?)')
     const findTag = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE')
-    const findTagBySlug = db.prepare('SELECT id FROM tags WHERE slug = ?')
     const linkTag = db.prepare('INSERT OR IGNORE INTO topic_tags (topic_id, tag_id) VALUES (?, ?)')
 
     for (const rawTag of [...new Set(input.tags.map(tag => tag.trim()).filter(Boolean))]) {
       const existingTag = findTag.get(rawTag) as { id: number } | undefined
       if (!existingTag) {
-        const baseSlug = slugifyTopic(rawTag)
-        const slug = findTagBySlug.get(baseSlug)
-          ? `${baseSlug}-${createHash('sha256').update(rawTag).digest('hex').slice(0, 8)}`
-          : baseSlug
-        insertTag.run(rawTag, slug)
+        db.prepare('INSERT INTO tags (name, slug) VALUES (?, ?)')
+          .run(rawTag, uniqueTagSlug(db, rawTag))
       }
       const tag = findTag.get(rawTag) as { id: number }
       linkTag.run(topicId, tag.id)

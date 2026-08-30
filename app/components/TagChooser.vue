@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { ForumTag } from '~/types/forum'
 
 const props = withDefaults(defineProps<{
@@ -12,6 +12,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string[]]
 }>()
 
+const triggerButton = ref<HTMLButtonElement | null>(null)
 const open = ref(false)
 const query = ref('')
 const normalizedSelected = computed(() => props.modelValue.map(tag => tag.toLocaleLowerCase()))
@@ -35,6 +36,8 @@ function add(name: string) {
   if (normalizedSelected.value.includes(name.toLocaleLowerCase())) return
   emit('update:modelValue', [...props.modelValue, name.trim()])
   query.value = ''
+  open.value = false
+  void nextTick(() => triggerButton.value?.focus())
 }
 
 function remove(name: string) {
@@ -45,6 +48,7 @@ function handleKeydown(event: KeyboardEvent) {
   const choices = filteredOptions.value
   if (event.key === 'Escape') {
     open.value = false
+    void nextTick(() => triggerButton.value?.focus())
     return
   }
   if (event.key === 'ArrowDown') {
@@ -75,6 +79,7 @@ function handleKeydown(event: KeyboardEvent) {
         <button type="button" :aria-label="`移除标签：${tag}`" @click="remove(tag)">×</button>
       </span>
       <button
+        ref="triggerButton"
         type="button"
         aria-label="选择标签"
         :aria-expanded="open"

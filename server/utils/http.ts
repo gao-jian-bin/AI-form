@@ -22,6 +22,9 @@ const BAD_REQUEST_MESSAGES = new Set([
   '网址标识已被使用',
   '板块中还有帖子，请先移动或删除这些帖子',
   '至少保留一个板块',
+  '标签不存在',
+  '标签名称不能为空',
+  '标签名称已被使用',
 ])
 
 export function requireAdmin(event: H3Event): string {

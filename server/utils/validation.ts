@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { CategoryInput, CategoryUpdateInput, TopicInput } from './database'
+import type { CategoryInput, CategoryUpdateInput, TagInput, TopicInput } from './database'
 import { validateExternalUrl } from './content'
 
 const CATEGORY_SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -75,4 +75,12 @@ export function parseCategoryPayload(
   return mode === 'create'
     ? createCategorySchema.parse(value)
     : updateCategorySchema.parse(value)
+}
+
+const tagSchema = z.object({
+  name: z.string().trim().min(1, '标签名称不能为空').max(60, '标签名称不能超过 60 个字符'),
+})
+
+export function parseTagPayload(value: unknown): TagInput {
+  return tagSchema.parse(value)
 }
