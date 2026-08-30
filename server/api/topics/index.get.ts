@@ -1,15 +1,19 @@
 import { getQuery } from 'h3'
-import { listPublicTopics } from '../../utils/database'
+import { listPublicTopicPage } from '../../utils/database'
 import { getForumDatabase } from '../../utils/forum'
+import { requestError } from '../../utils/http'
+import { parsePublicTopicQuery } from '../../utils/validation'
 
 export default defineEventHandler((event) => {
-  const query = getQuery(event)
-  const topics = listPublicTopics(getForumDatabase(), {
-    category: typeof query.category === 'string' ? query.category : undefined,
-    tag: typeof query.tag === 'string' ? query.tag : undefined,
-    query: typeof query.q === 'string' ? query.q : undefined,
-    limit: 60,
-  })
+  try {
+    const page = listPublicTopicPage(getForumDatabase(), parsePublicTopicQuery(getQuery(event)))
 
-  return topics.map(({ contentMarkdown: _content, ...topic }) => topic)
+    return {
+      ...page,
+      items: page.items.map(({ contentMarkdown: _content, ...topic }) => topic),
+    }
+  }
+  catch (error) {
+    return requestError(error)
+  }
 })

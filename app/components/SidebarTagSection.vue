@@ -21,9 +21,9 @@ const expanded = ref(false)
     <ul v-if="expanded" class="sidebar-section-content" data-tag-list>
       <li v-for="tag in tags" :key="tag.id" class="sidebar-section-link-wrapper">
         <NuxtLink
-          :to="`/tag/${encodeURIComponent(tag.name)}`"
+          :to="`/tag/${encodeURIComponent(tag.slug)}`"
           class="sidebar-section-link"
-          :class="{ active: activeTag?.toLocaleLowerCase() === tag.name.toLocaleLowerCase() }"
+          :class="{ active: activeTag?.toLocaleLowerCase() === tag.slug.toLocaleLowerCase() }"
           @click="emit('navigate')"
         >
           <span class="sidebar-tag-prefix">#</span>

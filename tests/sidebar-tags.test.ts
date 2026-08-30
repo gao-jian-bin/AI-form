@@ -17,7 +17,7 @@ describe('SidebarTagSection', () => {
           { id: 2, name: 'Base64', slug: 'base64', topicCount: 1 },
           { id: 3, name: '图片处理', slug: '图片处理', topicCount: 2 },
         ],
-        activeTag: 'Prompt',
+        activeTag: 'prompt',
       },
       global: { stubs: { NuxtLink: NuxtLinkStub } },
     })
@@ -33,9 +33,9 @@ describe('SidebarTagSection', () => {
     expect(wrapper.get('[data-tag-list]').text()).toContain('Prompt')
     expect(wrapper.get('[data-tag-list]').text()).toContain('Base64')
     expect(wrapper.get('[data-tag-list]').text()).toContain('图片处理')
-    expect(wrapper.get('a[href="/tag/Prompt"]').classes()).toContain('active')
+    expect(wrapper.get('a[href="/tag/prompt"]').classes()).toContain('active')
 
-    await wrapper.get('a[href="/tag/Base64"]').trigger('click')
+    await wrapper.get('a[href="/tag/base64"]').trigger('click')
     expect(wrapper.emitted('navigate')).toHaveLength(1)
   })
 })

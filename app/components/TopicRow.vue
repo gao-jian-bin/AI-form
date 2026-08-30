@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { TopicSummary } from '~/types/forum'
+import type { ForumTag, TopicSummary } from '~/types/forum'
 import { formatDottedDate } from '../utils/date-format'
 
-const props = defineProps<{ topic: TopicSummary }>()
+const props = defineProps<{ topic: TopicSummary; availableTags?: ForumTag[] }>()
 
 const topicUrl = computed(() => `/t/${props.topic.slug}/${props.topic.id}`)
 const externalHost = computed(() => {
@@ -31,6 +31,11 @@ const activityTitle = computed(() => new Intl.DateTimeFormat('zh-CN', {
   hour: '2-digit',
   minute: '2-digit',
 }).format(activityDate.value))
+
+function tagUrl(name: string): string {
+  const tag = props.availableTags?.find(item => item.name.toLocaleLowerCase() === name.toLocaleLowerCase())
+  return `/tag/${encodeURIComponent(tag?.slug || name)}`
+}
 </script>
 
 <template>
@@ -50,7 +55,7 @@ const activityTitle = computed(() => new Intl.DateTimeFormat('zh-CN', {
           <span class="badge-category__bullet" :style="{ backgroundColor: topic.category.color }" />
           <span class="badge-category__name">{{ topic.category.name }}</span>
         </NuxtLink>
-        <NuxtLink v-for="tag in topic.tags" :key="tag" :to="`/tag/${encodeURIComponent(tag)}`" class="discourse-tag">
+        <NuxtLink v-for="tag in topic.tags" :key="tag" :to="tagUrl(tag)" class="discourse-tag">
           {{ tag }}
         </NuxtLink>
         <span v-if="externalHost" class="topic-featured-link">↗ {{ externalHost }}</span>

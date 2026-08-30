@@ -724,6 +724,54 @@ select {
   color: var(--primary-medium);
 }
 
+.topic-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35em;
+  padding: 1.1em 0.75em;
+  border-top: 1px solid var(--primary-low);
+  color: var(--primary-medium);
+  font-size: 0.875rem;
+}
+
+.topic-pagination a,
+.topic-pagination__direction,
+.topic-pagination__page {
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35em 0.65em;
+  border: 1px solid var(--primary-low);
+  border-radius: 3px;
+  color: var(--primary-high);
+  background: var(--secondary);
+  text-decoration: none;
+}
+
+.topic-pagination__page.active {
+  border-color: var(--tertiary);
+  color: var(--secondary);
+  background: var(--tertiary);
+}
+
+.topic-pagination .disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.topic-pagination__gap {
+  padding-inline: 0.2em;
+}
+
+.topic-pagination__total {
+  margin-left: 0.45em;
+  white-space: nowrap;
+}
+
 /* Topic page and post stream */
 .topic-page-container {
   padding-top: 28px;

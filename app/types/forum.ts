@@ -40,6 +40,14 @@ export interface TopicDetail extends TopicSummary {
   contentHtml: string
 }
 
+export interface TopicPage {
+  items: TopicSummary[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
 export interface StudioTopic extends TopicSummary {
   contentMarkdown: string
 }

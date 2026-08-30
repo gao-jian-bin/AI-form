@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ForumCategory, ForumTag, TopicSummary } from '~/types/forum'
+import type { ForumCategory, ForumTag, TopicPage, TopicSummary } from '~/types/forum'
 
 const props = defineProps<{
   title: string
@@ -7,6 +7,7 @@ const props = defineProps<{
   topics: TopicSummary[]
   categories: ForumCategory[]
   tags: ForumTag[]
+  pagination?: Pick<TopicPage, 'page' | 'total' | 'totalPages'>
   pending?: boolean
   errorMessage?: string
   activeCategory?: string
@@ -26,7 +27,9 @@ function selectCategory(event: Event) {
 
 function selectTag(event: Event) {
   const value = (event.target as HTMLSelectElement).value
-  if (value) navigateTo(`/tag/${encodeURIComponent(value)}`)
+  navigateTo(value
+    ? `/tag/${encodeURIComponent(value)}`
+    : props.activeCategory ? `/c/${props.activeCategory}` : '/')
 }
 
 function submitFullPageSearch() {
@@ -73,9 +76,9 @@ function submitFullPageSearch() {
               </label>
               <label class="select-kit">
                 <span class="sr-only">选择标签</span>
-                <select value="" @change="selectTag">
+                <select :value="activeTag || ''" @change="selectTag">
                   <option value="">所有标签</option>
-                  <option v-for="tag in tags" :key="tag.id" :value="tag.name">{{ tag.name }}</option>
+                  <option v-for="tag in tags" :key="tag.id" :value="tag.slug">{{ tag.name }}</option>
                 </select>
               </label>
             </div>
@@ -112,9 +115,15 @@ function submitFullPageSearch() {
               </tr>
             </thead>
             <tbody class="topic-list-body">
-              <TopicRow v-for="topic in topics" :key="topic.id" :topic="topic" />
+              <TopicRow v-for="topic in topics" :key="topic.id" :topic="topic" :available-tags="tags" />
             </tbody>
           </table>
+          <TopicPagination
+            v-if="pagination"
+            :page="pagination.page"
+            :total="pagination.total"
+            :total-pages="pagination.totalPages"
+          />
         </div>
       </section>
     </div>

@@ -1,30 +1,38 @@
 <script setup lang="ts">
-import type { ForumCategory, ForumTag, TopicSummary } from '~/types/forum'
+import type { ForumCategory, ForumTag, TopicPage } from '~/types/forum'
 
 const route = useRoute()
-const tag = computed(() => decodeURIComponent(String(route.params.slug)))
+const requestedTag = decodeURIComponent(String(route.params.slug))
+const page = computed(() => typeof route.query.page === 'string' ? route.query.page : '1')
 const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
 const { data: tags } = await useFetch<ForumTag[]>('/api/tags', { default: () => [] })
-const { data: topics, status, error, refresh } = await useFetch<TopicSummary[]>('/api/topics', {
-  query: { tag },
-  default: () => [],
+const slugMatch = tags.value.find(item => item.slug.toLocaleLowerCase() === requestedTag.toLocaleLowerCase())
+const legacyNameMatch = tags.value.find(item => item.name.toLocaleLowerCase() === requestedTag.toLocaleLowerCase())
+const tag = slugMatch || legacyNameMatch
+if (tag && !slugMatch) {
+  await navigateTo(`/tag/${encodeURIComponent(tag.slug)}`, { redirectCode: 301, replace: true })
+}
+const { data: topicPage, status, error, refresh } = await useFetch<TopicPage>('/api/topics', {
+  query: { tag: tag?.slug || requestedTag, page },
+  default: () => ({ items: [], page: 1, pageSize: 30, total: 0, totalPages: 0 }),
 })
 useCanonical(() => route.path)
 
 useSeoMeta({
-  title: () => `#${tag.value}`,
-  description: () => `浏览标签“${tag.value}”下的全部主题。`,
+  title: () => `#${tag?.name || requestedTag}`,
+  description: () => `浏览标签“${tag?.name || requestedTag}”下的全部主题。`,
 })
 </script>
 
 <template>
   <ForumPage
-    :title="`#${tag}`"
+    :title="`#${tag?.name || requestedTag}`"
     description="同一个关键词下的跨板块内容。"
-    :topics="topics"
+    :topics="topicPage.items"
+    :pagination="topicPage"
     :categories="categories"
     :tags="tags"
-    :active-tag="tag"
+    :active-tag="tag?.slug || requestedTag"
     :pending="status === 'pending'"
     :error-message="error?.statusMessage"
     eyebrow="TAG INDEX"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ForumCategory, ForumTag, TopicDetail, TopicSummary } from '~/types/forum'
+import type { ForumCategory, ForumTag, TopicDetail, TopicPage } from '~/types/forum'
 import { formatDottedDate } from '~/utils/date-format'
 
 const route = useRoute()
@@ -18,11 +18,16 @@ const { data: adminSession } = await useFetch<{ authenticated: boolean }>('/api/
 })
 const { openEdit, revision } = useAdminComposer()
 watch(revision, () => refresh())
-const { data: related } = await useFetch<TopicSummary[]>('/api/topics', {
-  query: { category: topic.value.category.slug, limit: 5 },
-  default: () => [],
+const { data: related } = await useFetch<TopicPage>('/api/topics', {
+  query: { category: topic.value.category.slug, pageSize: 5 },
+  default: () => ({ items: [], page: 1, pageSize: 5, total: 0, totalPages: 0 }),
 })
-const relatedTopics = computed(() => related.value.filter(item => item.id !== id.value).slice(0, 4))
+const relatedTopics = computed(() => related.value.items.filter(item => item.id !== id.value).slice(0, 4))
+
+function tagUrl(name: string): string {
+  const tag = tags.value.find(item => item.name.toLocaleLowerCase() === name.toLocaleLowerCase())
+  return `/tag/${encodeURIComponent(tag?.slug || name)}`
+}
 
 useSeoMeta({
   title: () => topic.value?.title || '主题',
@@ -50,7 +55,7 @@ onMounted(() => {
               <span class="badge-category__bullet" :style="{ backgroundColor: topic.category.color }" />
               <span class="badge-category__name">{{ topic.category.name }}</span>
             </NuxtLink>
-            <NuxtLink v-for="tag in topic.tags" :key="tag" :to="`/tag/${encodeURIComponent(tag)}`" class="discourse-tag">{{ tag }}</NuxtLink>
+            <NuxtLink v-for="tag in topic.tags" :key="tag" :to="tagUrl(tag)" class="discourse-tag">{{ tag }}</NuxtLink>
           </div>
         </header>
 
@@ -97,7 +102,7 @@ onMounted(() => {
           <h2>推荐主题</h2>
           <table class="topic-list" aria-label="推荐主题">
             <thead class="topic-list-header"><tr><th class="topic-list-data default">主题</th><th class="topic-list-data num views">浏览</th><th class="topic-list-data num activity">活动</th></tr></thead>
-            <tbody class="topic-list-body"><TopicRow v-for="item in relatedTopics" :key="item.id" :topic="item" /></tbody>
+            <tbody class="topic-list-body"><TopicRow v-for="item in relatedTopics" :key="item.id" :topic="item" :available-tags="tags" /></tbody>
           </table>
         </section>
       </section>

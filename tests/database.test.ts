@@ -15,6 +15,7 @@ import {
   listTopicRevisions,
   listCategories,
   listPublicTags,
+  listPublicTopicPage,
   listPublicTopics,
   listStudioCategories,
   listStudioTags,
@@ -210,6 +211,32 @@ describe('forum database', () => {
     expect(listPublicTopics(db, { category: 'chatgpt' })).toHaveLength(1)
     expect(listPublicTopics(db, { tag: '图片处理' })[0]?.title).toBe('Squoosh 图片压缩')
     expect(listPublicTopics(db, { query: 'markdown' })[0]?.title).toBe('ChatGPT 项目提示词整理')
+  })
+
+  it('makes every published topic reachable through bounded pages', () => {
+    for (let index = 1; index <= 75; index += 1) {
+      saveTopic(db, {
+        title: `分页帖子 ${index}`,
+        categorySlug: index % 2 === 0 ? 'chatgpt' : 'toolbox',
+        contentMarkdown: `第 ${index} 篇正文`,
+        status: 'published',
+        tags: [index % 2 === 0 ? '偶数' : '奇数'],
+        isPinned: false,
+        externalUrl: null,
+        publishedAt: new Date(Date.UTC(2024, 0, 1, 0, 0, index)).toISOString(),
+      })
+    }
+
+    const first = listPublicTopicPage(db, { page: 1, pageSize: 30 })
+    const third = listPublicTopicPage(db, { page: 3, pageSize: 30 })
+    const tagged = listPublicTopicPage(db, { page: 1, pageSize: 30, tagSlug: '偶数' })
+
+    expect(first).toEqual(expect.objectContaining({ page: 1, pageSize: 30, total: 75, totalPages: 3 }))
+    expect(first.items).toHaveLength(30)
+    expect(third.items).toHaveLength(15)
+    expect(new Set([...first.items, ...third.items].map(topic => topic.id)).size).toBe(45)
+    expect(tagged.total).toBe(37)
+    expect(tagged.items.every(topic => topic.tags.includes('偶数'))).toBe(true)
   })
 
   it('keeps the public topic address stable when its title changes', () => {

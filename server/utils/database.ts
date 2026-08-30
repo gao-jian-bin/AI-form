@@ -89,6 +89,21 @@ export interface TopicRevision {
   createdAt: string
 }
 
+export interface PublicTopicPage {
+  items: TopicRecord[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
+}
+
+export interface PublicTopicFilters {
+  category?: string
+  tag?: string
+  tagSlug?: string
+  query?: string
+}
+
 interface RawTopicRow {
   id: number
   title: string
@@ -551,10 +566,9 @@ export function deleteTag(db: Database.Database, id: number): boolean {
   return db.prepare('DELETE FROM tags WHERE id = ?').run(id).changes > 0
 }
 
-export function listPublicTopics(
-  db: Database.Database,
-  filters: { category?: string; tag?: string; query?: string; limit?: number },
-): TopicRecord[] {
+function publicTopicFilter(
+  filters: PublicTopicFilters,
+): { conditions: string[]; params: Array<string | number> } {
   const conditions = ["topics.status = 'published'"]
   const params: Array<string | number> = []
 
@@ -570,6 +584,14 @@ export function listPublicTopics(
     )`)
     params.push(filters.tag)
   }
+  if (filters.tagSlug) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM topic_tags filter_topic_tags
+      JOIN tags filter_tags ON filter_tags.id = filter_topic_tags.tag_id
+      WHERE filter_topic_tags.topic_id = topics.id AND filter_tags.slug = ?
+    )`)
+    params.push(filters.tagSlug)
+  }
   if (filters.query?.trim()) {
     conditions.push(`(
       lower(topics.title) LIKE lower(?) OR
@@ -580,6 +602,15 @@ export function listPublicTopics(
     params.push(search, search, search)
   }
 
+  return { conditions, params }
+}
+
+export function listPublicTopics(
+  db: Database.Database,
+  filters: PublicTopicFilters & { limit?: number },
+): TopicRecord[] {
+  const { conditions, params } = publicTopicFilter(filters)
+
   params.push(Math.min(Math.max(filters.limit ?? 50, 1), 100))
   const rows = db.prepare(`${TOPIC_SELECT}
     WHERE ${conditions.join(' AND ')}
@@ -588,6 +619,35 @@ export function listPublicTopics(
   `).all(...params) as RawTopicRow[]
 
   return rows.map(mapTopic)
+}
+
+export function listPublicTopicPage(
+  db: Database.Database,
+  filters: PublicTopicFilters & { page?: number; pageSize?: number },
+): PublicTopicPage {
+  const page = Math.max(1, Math.trunc(filters.page ?? 1))
+  const pageSize = Math.min(Math.max(Math.trunc(filters.pageSize ?? 30), 1), 50)
+  const { conditions, params } = publicTopicFilter(filters)
+  const where = conditions.join(' AND ')
+  const count = db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM topics
+    JOIN categories ON categories.id = topics.category_id
+    WHERE ${where}
+  `).get(...params) as { count: number }
+  const rows = db.prepare(`${TOPIC_SELECT}
+    WHERE ${where}
+    ORDER BY topics.is_pinned DESC, topics.published_at DESC, topics.id DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, pageSize, (page - 1) * pageSize) as RawTopicRow[]
+
+  return {
+    items: rows.map(mapTopic),
+    page,
+    pageSize,
+    total: count.count,
+    totalPages: Math.ceil(count.count / pageSize),
+  }
 }
 
 export function listStudioTopics(db: Database.Database): TopicRecord[] {

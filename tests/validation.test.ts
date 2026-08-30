@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseCategoryPayload, parseTagPayload, parseTopicPayload } from '../server/utils/validation'
+import {
+  parseCategoryPayload,
+  parsePublicTopicQuery,
+  parseTagPayload,
+  parseTopicPayload,
+} from '../server/utils/validation'
 
 describe('parseTopicPayload', () => {
   it('normalizes a valid editor payload into the database contract', () => {
@@ -98,6 +103,44 @@ describe('parseTopicPayload', () => {
       isPinned: false,
       publishedAt: '2999-01-01T00:00:00.000Z',
     })).toThrow('发布时间不能晚于当前时间')
+  })
+
+  it('rejects overlong or excessive topic tags before they reach SQLite', () => {
+    const base = {
+      title: '标签边界',
+      categorySlug: 'chatgpt',
+      contentMarkdown: '正文',
+      status: 'published',
+      isPinned: false,
+    }
+    expect(() => parseTopicPayload({ ...base, tags: ['x'.repeat(61)] }))
+      .toThrow('单个标签不能超过 60 个字符')
+    expect(() => parseTopicPayload({ ...base, tags: Array.from({ length: 9 }, (_, index) => `标签${index}`) }))
+      .toThrow('一篇帖子最多选择 8 个标签')
+  })
+})
+
+describe('parsePublicTopicQuery', () => {
+  it('normalizes pagination and stable resource filters', () => {
+    expect(parsePublicTopicQuery({
+      category: 'chatgpt',
+      tag: '工作流',
+      q: '  Markdown  ',
+      page: '2',
+      pageSize: '25',
+    })).toEqual({
+      category: 'chatgpt',
+      tagSlug: '工作流',
+      query: 'Markdown',
+      page: 2,
+      pageSize: 25,
+    })
+  })
+
+  it('rejects malformed or unbounded pagination values', () => {
+    expect(() => parsePublicTopicQuery({ page: '0' })).toThrow('页码必须大于 0')
+    expect(() => parsePublicTopicQuery({ pageSize: '5000' })).toThrow('每页最多显示 50 篇帖子')
+    expect(() => parsePublicTopicQuery({ tag: '../private' })).toThrow('标签网址标识格式不正确')
   })
 })
 
