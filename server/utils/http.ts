@@ -9,6 +9,7 @@ import {
 } from 'h3'
 import { validateAdminSession } from './auth'
 import { getForumDatabase } from './forum'
+import { resolveClientAddress } from './security'
 
 export const ADMIN_SESSION_COOKIE = 'ai_forum_admin'
 
@@ -44,10 +45,19 @@ export function numericRouteId(value: string | undefined, entity = '主题'): nu
 }
 
 export function visitorFingerprint(event: H3Event): string {
-  const ip = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
+  const ip = clientAddress(event)
   const agent = getHeader(event, 'user-agent') || 'unknown'
   const secret = process.env.VIEW_HASH_SECRET || 'local-development-view-secret'
   return createHash('sha256').update(`${secret}:${ip}:${agent}`).digest('hex')
+}
+
+export function clientAddress(event: H3Event): string {
+  return resolveClientAddress({
+    trustProxy: process.env.TRUST_PROXY === 'true',
+    socketAddress: getRequestIP(event),
+    cfConnectingIp: getHeader(event, 'cf-connecting-ip'),
+    forwardedFor: getHeader(event, 'x-forwarded-for'),
+  })
 }
 
 export function requestError(error: unknown): never {

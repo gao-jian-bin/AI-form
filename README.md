@@ -74,10 +74,13 @@ npm.cmd run password:hash -- "你的至少12位密码"
 |---|---|
 | `SITE_URL` | 正式域名，用于站点地图和 canonical 地址 |
 | `DATABASE_PATH` | SQLite 文件位置 |
+| `UPLOAD_DIR` | 编辑器上传图片的保存目录 |
 | `SEED_DEMO_CONTENT` | 空库启动时是否写入演示主题 |
 | `ADMIN_PASSWORD_HASH` | 推荐的管理员密码 scrypt 哈希 |
 | `ADMIN_PASSWORD` | 仅用于临时本地开发的明文密码 |
 | `VIEW_HASH_SECRET` | 匿名浏览量指纹的随机密钥 |
+| `TRUST_PROXY` | 仅在源站不可被公网直连时信任代理传来的访客地址 |
+| `UPLOAD_QUOTA_MB` | 上传图片占用空间上限，默认 2048 MB |
 
 生产环境建议执行：
 
@@ -106,7 +109,7 @@ docker compose up -d --build
 docker compose logs -f forum
 ```
 
-容器监听服务器的 `3000` 端口，SQLite 数据写入宿主机的 `./data/ai-forum.db`。反向代理应把正式域名转发到 `127.0.0.1:3000`，并配置 HTTPS。
+容器的 `3000` 端口只绑定服务器本机 `127.0.0.1`，不能从公网直接访问。SQLite 写入 `./data/ai-forum.db`，图片写入 `./data/uploads`；反向代理或 Cloudflare Tunnel 再把正式域名转发到 `http://127.0.0.1:3000`。
 
 更新版本：
 
@@ -118,12 +121,12 @@ docker image prune -f
 
 ## 数据备份与恢复
 
-为避免复制正在写入的 SQLite 文件，先停止应用，再复制数据库：
+数据库和上传图片都在 `data` 目录。为得到一致备份，先停止应用，再完整打包该目录：
 
 ```bash
 mkdir -p backups
 docker compose stop forum
-cp data/ai-forum.db "backups/ai-forum-$(date +%F-%H%M%S).db"
+sudo tar -C data -czf "backups/ai-forum-data-$(date +%F-%H%M%S).tar.gz" .
 docker compose start forum
 ```
 
@@ -131,11 +134,12 @@ docker compose start forum
 
 ```bash
 docker compose stop forum
-cp backups/需要恢复的文件.db data/ai-forum.db
+sudo find data -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+sudo tar -C data -xzf backups/需要恢复的备份.tar.gz
 docker compose start forum
 ```
 
-备份文件可能包含未发布草稿，不要放进公开下载目录，也不要提交到 Git。
+备份文件包含未发布草稿和全部图片，不要放进公开下载目录，也不要提交到 Git。至少再复制一份到另一台设备或可信对象存储；Cloudflare CDN 和 Tunnel 都不会替你备份这些文件。
 
 ## SQLite 和 MySQL
 

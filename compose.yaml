@@ -2,19 +2,32 @@ services:
   forum:
     build: .
     restart: unless-stopped
+    init: true
     env_file:
       - .env
     environment:
       DATABASE_PATH: /data/ai-forum.db
+      UPLOAD_DIR: /data/uploads
       HOST: 0.0.0.0
       PORT: 3000
       NODE_ENV: production
+      TRUST_PROXY: "true"
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/categories').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

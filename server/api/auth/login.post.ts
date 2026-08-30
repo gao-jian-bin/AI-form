@@ -1,7 +1,7 @@
-import { createError, getRequestIP, readBody, setCookie } from 'h3'
+import { createError, readBody, setCookie } from 'h3'
 import { LoginAttemptLimiter, createAdminSession, hashPassword, verifyPassword } from '../../utils/auth'
 import { getForumDatabase } from '../../utils/forum'
-import { ADMIN_SESSION_COOKIE } from '../../utils/http'
+import { ADMIN_SESSION_COOKIE, clientAddress } from '../../utils/http'
 
 const limiter = new LoginAttemptLimiter({ maxAttempts: 5, windowMs: 15 * 60_000 })
 
@@ -17,7 +17,7 @@ function configuredPasswordHash(): string {
 }
 
 export default defineEventHandler(async (event) => {
-  const address = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
+  const address = clientAddress(event)
   if (!limiter.canAttempt(address)) {
     throw createError({ statusCode: 429, statusMessage: '尝试次数过多，请 15 分钟后再试' })
   }
