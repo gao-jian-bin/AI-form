@@ -43,3 +43,19 @@ export interface TopicDetail extends TopicSummary {
 export interface StudioTopic extends TopicSummary {
   contentMarkdown: string
 }
+
+export interface TopicRevision {
+  id: number
+  topicId: number
+  title: string
+  slug: string
+  excerpt: string
+  contentMarkdown: string
+  categorySlug: string
+  status: 'draft' | 'published'
+  isPinned: boolean
+  externalUrl: string | null
+  publishedAt: string | null
+  tags: string[]
+  createdAt: string
+}

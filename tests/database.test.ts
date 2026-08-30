@@ -7,17 +7,21 @@ import {
   deleteCategory,
   deleteTag,
   ensureBaseCategories,
+  forumSchemaVersion,
   getStudioCategory,
   getStudioTag,
   getPublicTopic,
   getStudioTopic,
+  listTopicRevisions,
   listCategories,
   listPublicTags,
   listPublicTopics,
   listStudioCategories,
   listStudioTags,
   migrateForumDatabase,
+  purgeOperationalData,
   recordTopicView,
+  restoreTopicRevision,
   saveTopic,
   updateCategory,
   updateTag,
@@ -39,6 +43,16 @@ describe('forum database', () => {
       expect.objectContaining({ name: 'ChatGPT', slug: 'chatgpt', position: 1 }),
       expect.objectContaining({ name: '工具箱', slug: 'toolbox', position: 2 }),
     ])
+  })
+
+  it('applies ordered schema migrations once and records the current version', () => {
+    expect(forumSchemaVersion(db)).toBe(2)
+
+    migrateForumDatabase(db)
+
+    expect(forumSchemaVersion(db)).toBe(2)
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'topic_revisions'").get())
+      .toEqual({ name: 'topic_revisions' })
   })
 
   it('does not overwrite administrator changes when defaults are ensured again', () => {
@@ -224,6 +238,62 @@ describe('forum database', () => {
     expect(updated.slug).toBe(created.slug)
   })
 
+  it('stores the complete previous topic state before an administrator edit', () => {
+    const created = saveTopic(db, {
+      title: '初始标题', categorySlug: 'chatgpt', contentMarkdown: '初始正文', status: 'published',
+      tags: ['Prompt', '旧标签'], isPinned: false, externalUrl: null,
+      publishedAt: '2024-01-01T08:00:00.000Z',
+    })
+
+    saveTopic(db, {
+      id: created.id,
+      title: '修改后标题', categorySlug: 'toolbox', contentMarkdown: '修改后正文', status: 'draft',
+      tags: ['新标签'], isPinned: true, externalUrl: 'https://example.com/tool',
+    })
+
+    expect(listTopicRevisions(db, created.id)).toEqual([
+      expect.objectContaining({
+        topicId: created.id,
+        title: '初始标题',
+        contentMarkdown: '初始正文',
+        categorySlug: 'chatgpt',
+        status: 'published',
+        isPinned: false,
+        externalUrl: null,
+        publishedAt: '2024-01-01T08:00:00.000Z',
+        tags: ['Prompt', '旧标签'],
+      }),
+    ])
+  })
+
+  it('restores a revision and preserves the replaced state as a new safety revision', () => {
+    const created = saveTopic(db, {
+      title: '版本一', categorySlug: 'chatgpt', contentMarkdown: '正文一', status: 'published',
+      tags: ['一'], isPinned: false, externalUrl: null,
+    })
+    saveTopic(db, {
+      id: created.id,
+      title: '版本二', categorySlug: 'toolbox', contentMarkdown: '正文二', status: 'published',
+      tags: ['二'], isPinned: true, externalUrl: null,
+    })
+    const revision = listTopicRevisions(db, created.id)[0]!
+
+    const restored = restoreTopicRevision(db, created.id, revision.id)
+
+    expect(restored).toEqual(expect.objectContaining({
+      title: '版本一',
+      contentMarkdown: '正文一',
+      isPinned: false,
+      tags: ['一'],
+      category: expect.objectContaining({ slug: 'chatgpt' }),
+    }))
+    expect(listTopicRevisions(db, created.id)).toHaveLength(2)
+    expect(listTopicRevisions(db, created.id)[0]).toEqual(expect.objectContaining({
+      title: '版本二',
+      tags: ['二'],
+    }))
+  })
+
   it('stores an administrator supplied publish time', () => {
     const topic = saveTopic(db, {
       title: '补录旧帖',
@@ -327,6 +397,27 @@ describe('forum database', () => {
 
     expect(recordTopicView(db, draft.id, 'visitor')).toBe(false)
     expect((db.prepare('SELECT view_count FROM topics WHERE id = ?').get(draft.id) as { view_count: number }).view_count).toBe(0)
+  })
+
+  it('purges expired operational rows without changing aggregate topic views', () => {
+    const topic = saveTopic(db, {
+      title: '清理测试', categorySlug: 'chatgpt', contentMarkdown: '正文', status: 'published',
+      tags: [], isPinned: false, externalUrl: null,
+    })
+    recordTopicView(db, topic.id, 'old-visitor', new Date('2026-06-01T00:00:00.000Z'))
+    recordTopicView(db, topic.id, 'recent-visitor', new Date('2026-08-20T00:00:00.000Z'))
+    db.prepare('INSERT INTO admin_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)')
+      .run('expired', '2026-06-01T00:00:00.000Z', '2026-06-02T00:00:00.000Z')
+    db.prepare('INSERT INTO admin_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)')
+      .run('active', '2026-08-20T00:00:00.000Z', '2026-09-20T00:00:00.000Z')
+
+    expect(purgeOperationalData(db, new Date('2026-08-30T00:00:00.000Z'))).toEqual({
+      deletedSessions: 1,
+      deletedViews: 1,
+    })
+    expect((db.prepare('SELECT COUNT(*) AS count FROM topic_views').get() as { count: number }).count).toBe(1)
+    expect((db.prepare('SELECT COUNT(*) AS count FROM admin_sessions').get() as { count: number }).count).toBe(1)
+    expect(getPublicTopic(db, topic.id)?.viewCount).toBe(2)
   })
 
   it('keeps distinct tag names even when their readable slugs would collide', () => {

@@ -73,6 +73,22 @@ export interface TopicRecord {
   tags: string[]
 }
 
+export interface TopicRevision {
+  id: number
+  topicId: number
+  title: string
+  slug: string
+  excerpt: string
+  contentMarkdown: string
+  categorySlug: string
+  status: TopicStatus
+  isPinned: boolean
+  externalUrl: string | null
+  publishedAt: string | null
+  tags: string[]
+  createdAt: string
+}
+
 interface RawTopicRow {
   id: number
   title: string
@@ -145,8 +161,18 @@ export function createForumDatabase(filename: string): Database.Database {
   return db
 }
 
-export function migrateForumDatabase(db: Database.Database): void {
-  db.exec(`
+const FORUM_SCHEMA_VERSION = 2
+
+interface ForumMigration {
+  version: number
+  up: (db: Database.Database) => void
+}
+
+const FORUM_MIGRATIONS: ForumMigration[] = [
+  {
+    version: 1,
+    up(db) {
+      db.exec(`
     CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -199,13 +225,65 @@ export function migrateForumDatabase(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_topic_views_visitor
       ON topic_views(topic_id, visitor_hash, viewed_at DESC);
 
+    CREATE INDEX IF NOT EXISTS idx_topic_views_viewed_at
+      ON topic_views(viewed_at);
+
     CREATE TABLE IF NOT EXISTS admin_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       token_hash TEXT NOT NULL UNIQUE,
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL
     );
-  `)
+
+    CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at
+      ON admin_sessions(expires_at);
+      `)
+    },
+  },
+  {
+    version: 2,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS topic_revisions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+          title TEXT NOT NULL,
+          slug TEXT NOT NULL,
+          excerpt TEXT NOT NULL,
+          content_markdown TEXT NOT NULL,
+          category_slug TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('draft', 'published')),
+          is_pinned INTEGER NOT NULL,
+          external_url TEXT,
+          published_at TEXT,
+          tags_json TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_topic_revisions_topic
+          ON topic_revisions(topic_id, id DESC);
+      `)
+    },
+  },
+]
+
+export function forumSchemaVersion(db: Database.Database): number {
+  return Number(db.pragma('user_version', { simple: true }))
+}
+
+export function migrateForumDatabase(db: Database.Database): void {
+  const currentVersion = forumSchemaVersion(db)
+  if (currentVersion > FORUM_SCHEMA_VERSION) {
+    throw new Error(`数据库版本 ${currentVersion} 高于程序支持的版本 ${FORUM_SCHEMA_VERSION}`)
+  }
+
+  for (const migration of FORUM_MIGRATIONS) {
+    if (migration.version <= currentVersion) continue
+    db.transaction(() => {
+      migration.up(db)
+      db.pragma(`user_version = ${migration.version}`)
+    })()
+  }
 }
 
 export function ensureBaseCategories(db: Database.Database): void {
@@ -531,6 +609,113 @@ export function getStudioTopic(db: Database.Database, id: number): TopicRecord |
   return row ? mapTopic(row) : null
 }
 
+function mapTopicRevision(row: any): TopicRevision {
+  let tags: string[] = []
+  try {
+    const parsed = JSON.parse(row.tags_json)
+    if (Array.isArray(parsed)) tags = parsed.filter(tag => typeof tag === 'string')
+  }
+  catch {
+    tags = []
+  }
+
+  return {
+    id: row.id,
+    topicId: row.topic_id,
+    title: row.title,
+    slug: row.slug,
+    excerpt: row.excerpt,
+    contentMarkdown: row.content_markdown,
+    categorySlug: row.category_slug,
+    status: row.status,
+    isPinned: Boolean(row.is_pinned),
+    externalUrl: row.external_url,
+    publishedAt: row.published_at,
+    tags,
+    createdAt: row.created_at,
+  }
+}
+
+export function listTopicRevisions(
+  db: Database.Database,
+  topicId: number,
+  limit = 50,
+): TopicRevision[] {
+  return (db.prepare(`
+    SELECT * FROM topic_revisions
+    WHERE topic_id = ?
+    ORDER BY id DESC
+    LIMIT ?
+  `).all(topicId, Math.min(Math.max(limit, 1), 100)) as any[]).map(mapTopicRevision)
+}
+
+export function getTopicRevision(
+  db: Database.Database,
+  topicId: number,
+  revisionId: number,
+): TopicRevision | null {
+  const row = db.prepare(`
+    SELECT * FROM topic_revisions
+    WHERE topic_id = ? AND id = ?
+  `).get(topicId, revisionId)
+  return row ? mapTopicRevision(row) : null
+}
+
+function insertTopicRevision(
+  db: Database.Database,
+  topic: TopicRecord,
+  createdAt: string,
+): void {
+  db.prepare(`
+    INSERT INTO topic_revisions (
+      topic_id, title, slug, excerpt, content_markdown, category_slug,
+      status, is_pinned, external_url, published_at, tags_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    topic.id,
+    topic.title,
+    topic.slug,
+    topic.excerpt,
+    topic.contentMarkdown,
+    topic.category.slug,
+    topic.status,
+    topic.isPinned ? 1 : 0,
+    topic.externalUrl,
+    topic.publishedAt,
+    JSON.stringify(topic.tags),
+    createdAt,
+  )
+}
+
+function comparableTags(tags: string[]): string[] {
+  return tags.map(tag => tag.toLocaleLowerCase()).sort((first, second) => first.localeCompare(second))
+}
+
+function topicWouldChange(
+  topic: TopicRecord,
+  next: {
+    title: string
+    excerpt: string
+    contentMarkdown: string
+    categorySlug: string
+    status: TopicStatus
+    isPinned: boolean
+    externalUrl: string | null
+    publishedAt: string | null
+    tags: string[]
+  },
+): boolean {
+  return topic.title !== next.title
+    || topic.excerpt !== next.excerpt
+    || topic.contentMarkdown !== next.contentMarkdown
+    || topic.category.slug !== next.categorySlug
+    || topic.status !== next.status
+    || topic.isPinned !== next.isPinned
+    || topic.externalUrl !== next.externalUrl
+    || topic.publishedAt !== next.publishedAt
+    || JSON.stringify(comparableTags(topic.tags)) !== JSON.stringify(comparableTags(next.tags))
+}
+
 export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord {
   const title = input.title.trim()
   const contentMarkdown = input.contentMarkdown.trim()
@@ -544,9 +729,7 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
   if (input.externalUrl && !externalUrl) throw new Error('工具链接必须是有效的 HTTP 或 HTTPS 地址')
 
   const timestamp = nowIso()
-  const existing = input.id
-    ? db.prepare('SELECT id, slug, published_at FROM topics WHERE id = ?').get(input.id) as { id: number; slug: string; published_at: string | null } | undefined
-    : undefined
+  const existing = input.id ? getStudioTopic(db, input.id) || undefined : undefined
   if (input.id && !existing) throw new Error('主题不存在')
 
   let requestedPublishedAt: string | null = null
@@ -559,12 +742,26 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
     requestedPublishedAt = requestedDate.toISOString()
   }
   const nextPublishedAt = input.status === 'published'
-    ? requestedPublishedAt || existing?.published_at || timestamp
-    : existing?.published_at || null
+    ? requestedPublishedAt || existing?.publishedAt || timestamp
+    : existing?.publishedAt || null
+  const nextExcerpt = input.excerpt?.trim() || excerptFromMarkdown(contentMarkdown)
+  const nextTags = [...new Set(input.tags.map(tag => tag.trim()).filter(Boolean))]
+  const shouldCreateRevision = existing && topicWouldChange(existing, {
+    title,
+    excerpt: nextExcerpt,
+    contentMarkdown,
+    categorySlug: input.categorySlug,
+    status: input.status,
+    isPinned: input.isPinned,
+    externalUrl,
+    publishedAt: nextPublishedAt,
+    tags: nextTags,
+  })
 
   const save = db.transaction(() => {
     let topicId: number
     if (existing) {
+      if (shouldCreateRevision) insertTopicRevision(db, existing, timestamp)
       db.prepare(`
         UPDATE topics SET
           title = ?, excerpt = ?, content_markdown = ?, category_id = ?, status = ?,
@@ -573,7 +770,7 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
         WHERE id = ?
       `).run(
         title,
-        input.excerpt?.trim() || excerptFromMarkdown(contentMarkdown),
+        nextExcerpt,
         contentMarkdown,
         category.id,
         input.status,
@@ -593,7 +790,7 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
       `).run(
         title,
         slugifyTopic(input.slug || title),
-        input.excerpt?.trim() || excerptFromMarkdown(contentMarkdown),
+        nextExcerpt,
         contentMarkdown,
         category.id,
         input.status,
@@ -610,7 +807,7 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
     const findTag = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE')
     const linkTag = db.prepare('INSERT OR IGNORE INTO topic_tags (topic_id, tag_id) VALUES (?, ?)')
 
-    for (const rawTag of [...new Set(input.tags.map(tag => tag.trim()).filter(Boolean))]) {
+    for (const rawTag of nextTags) {
       const existingTag = findTag.get(rawTag) as { id: number } | undefined
       if (!existingTag) {
         db.prepare('INSERT INTO tags (name, slug) VALUES (?, ?)')
@@ -627,6 +824,30 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
   const topic = getStudioTopic(db, topicId)
   if (!topic) throw new Error('保存主题失败')
   return topic
+}
+
+export function restoreTopicRevision(
+  db: Database.Database,
+  topicId: number,
+  revisionId: number,
+): TopicRecord | null {
+  const current = getStudioTopic(db, topicId)
+  const revision = getTopicRevision(db, topicId, revisionId)
+  if (!current || !revision) return null
+
+  return saveTopic(db, {
+    id: topicId,
+    title: revision.title,
+    slug: revision.slug,
+    excerpt: revision.excerpt,
+    categorySlug: revision.categorySlug,
+    contentMarkdown: revision.contentMarkdown,
+    status: revision.status,
+    tags: revision.tags,
+    isPinned: revision.isPinned,
+    externalUrl: revision.externalUrl,
+    publishedAt: revision.publishedAt,
+  })
 }
 
 export function deleteTopic(db: Database.Database, id: number): boolean {
@@ -658,4 +879,18 @@ export function recordTopicView(
   })
   transaction()
   return true
+}
+
+export function purgeOperationalData(
+  db: Database.Database,
+  now = new Date(),
+  viewRetentionDays = 30,
+): { deletedSessions: number; deletedViews: number } {
+  const viewCutoff = new Date(now.getTime() - viewRetentionDays * 24 * 60 * 60 * 1000).toISOString()
+  return db.transaction(() => ({
+    deletedSessions: db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?')
+      .run(now.toISOString()).changes,
+    deletedViews: db.prepare('DELETE FROM topic_views WHERE viewed_at < ?')
+      .run(viewCutoff).changes,
+  }))()
 }
