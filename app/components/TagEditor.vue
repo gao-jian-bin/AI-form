@@ -17,7 +17,7 @@ async function save() {
       method: props.tag ? 'PUT' : 'POST',
       body: form,
     })
-    await navigateTo('/studio/tags')
+    await navigateTo('/admin/tags')
   } catch (error: unknown) {
     errorMessage.value = getErrorMessage(error, '保存失败，请检查输入后重试')
   } finally {
@@ -35,7 +35,7 @@ async function save() {
         <p>{{ tag ? '修改后，已关联帖子会自动显示新名称。' : '先建立标签，之后在帖子编辑器中直接选择。' }}</p>
       </div>
       <div class="editor-actions">
-        <NuxtLink to="/studio/tags" class="button button-quiet">返回标签管理</NuxtLink>
+        <NuxtLink to="/admin/tags" class="button button-quiet">返回标签管理</NuxtLink>
       </div>
     </header>
 
@@ -58,7 +58,7 @@ async function save() {
           <button class="button button-primary" type="submit" :disabled="busy">
             {{ busy ? '正在保存…' : tag ? '保存修改' : '创建标签' }}
           </button>
-          <NuxtLink to="/studio/tags" class="button button-quiet">取消</NuxtLink>
+          <NuxtLink to="/admin/tags" class="button button-quiet">取消</NuxtLink>
         </div>
       </form>
 

@@ -83,3 +83,36 @@ export interface UploadInventory {
   quotaBytes: number
   cleanupGraceHours: number
 }
+
+export interface AnalyticsSummary {
+  todayViews: number
+  todayVisitors: number
+  sevenDayViews: number
+  sevenDayVisitors: number
+  thirtyDayViews: number
+  thirtyDayVisitors: number
+  totalViews: number
+  totalVisitors: number
+}
+
+export interface AnalyticsVisitor {
+  ipAddress: string
+  views: number
+  firstSeenAt: string
+  lastSeenAt: string
+  lastPath: string
+  userAgent: string
+}
+
+export interface AnalyticsPage {
+  path: string
+  views: number
+  visitors: number
+}
+
+export interface AnalyticsReport {
+  summary: AnalyticsSummary
+  visitors: AnalyticsVisitor[]
+  topPages: AnalyticsPage[]
+  retentionDays: number
+}

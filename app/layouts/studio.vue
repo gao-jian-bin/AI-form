@@ -1,24 +1,26 @@
 <script setup lang="ts">
 const route = useRoute()
 
-const isCategoryRoute = computed(() => route.path.startsWith('/studio/categories'))
-const isTagRoute = computed(() => route.path.startsWith('/studio/tags'))
-const isUploadRoute = computed(() => route.path.startsWith('/studio/uploads'))
+const isCategoryRoute = computed(() => route.path.startsWith('/admin/categories'))
+const isTagRoute = computed(() => route.path.startsWith('/admin/tags'))
+const isUploadRoute = computed(() => route.path.startsWith('/admin/uploads'))
+const isAnalyticsRoute = computed(() => route.path.startsWith('/admin/analytics'))
 </script>
 
 <template>
   <div class="studio-shell">
     <header class="studio-header">
       <div class="studio-header__primary">
-        <NuxtLink to="/studio" class="studio-brand">
+        <NuxtLink to="/admin" class="studio-brand">
           <span class="brand-mark brand-mark-small" aria-hidden="true">AI</span>
           <span>内容工作台</span>
         </NuxtLink>
         <nav class="studio-nav" aria-label="工作台导航">
-          <NuxtLink to="/studio" :class="{ active: !isCategoryRoute && !isTagRoute && !isUploadRoute && route.path !== '/studio/sign-in' }">帖子管理</NuxtLink>
-          <NuxtLink to="/studio/categories" :class="{ active: isCategoryRoute }">板块管理</NuxtLink>
-          <NuxtLink to="/studio/tags" :class="{ active: isTagRoute }">标签管理</NuxtLink>
-          <NuxtLink to="/studio/uploads" :class="{ active: isUploadRoute }">图片管理</NuxtLink>
+          <NuxtLink to="/admin" :class="{ active: !isCategoryRoute && !isTagRoute && !isUploadRoute && !isAnalyticsRoute && route.path !== '/admin/sign-in' }">帖子管理</NuxtLink>
+          <NuxtLink to="/admin/categories" :class="{ active: isCategoryRoute }">板块管理</NuxtLink>
+          <NuxtLink to="/admin/tags" :class="{ active: isTagRoute }">标签管理</NuxtLink>
+          <NuxtLink to="/admin/uploads" :class="{ active: isUploadRoute }">图片管理</NuxtLink>
+          <NuxtLink to="/admin/analytics" :class="{ active: isAnalyticsRoute }">访问统计</NuxtLink>
         </nav>
       </div>
       <NuxtLink to="/" class="button button-quiet">查看网站 ↗</NuxtLink>

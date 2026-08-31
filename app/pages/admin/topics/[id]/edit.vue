@@ -7,7 +7,7 @@ const { openEdit } = useAdminComposer()
 
 onMounted(async () => {
   openEdit(Number(route.params.id))
-  await navigateTo('/studio', { replace: true })
+  await navigateTo('/admin', { replace: true })
 })
 </script>
 

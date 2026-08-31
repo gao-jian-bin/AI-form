@@ -32,7 +32,7 @@ async function removeTag(tag: ForumTag) {
         <p>创建、改名或删除帖子标签。删除标签不会删除帖子。</p>
       </div>
       <div class="dashboard-actions">
-        <NuxtLink to="/studio/tags/new" class="button button-primary">＋ 新建标签</NuxtLink>
+        <NuxtLink to="/admin/tags/new" class="button button-primary">＋ 新建标签</NuxtLink>
       </div>
     </header>
 
@@ -48,7 +48,7 @@ async function removeTag(tag: ForumTag) {
             <td><strong>#{{ tag.name }}</strong><small>内部标识：{{ tag.slug }}</small></td>
             <td><strong class="category-topic-total">{{ tag.topicCount }}</strong></td>
             <td class="row-actions">
-              <NuxtLink :to="`/studio/tags/${tag.id}/edit`">编辑</NuxtLink>
+              <NuxtLink :to="`/admin/tags/${tag.id}/edit`">编辑</NuxtLink>
               <button type="button" @click="removeTag(tag)">删除</button>
             </td>
           </tr>

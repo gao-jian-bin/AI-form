@@ -36,6 +36,29 @@ describe('validateExternalUrl', () => {
 })
 
 describe('renderSafeMarkdown', () => {
+  it('turns a standalone external link into a Discourse-style onebox', () => {
+    const html = renderSafeMarkdown('[IP 质量检测 · ipdata](https://ipdata.co/ "查询 IP 位置、代理与风险信息，仅供参考")')
+
+    expect(html).toContain('<aside class="onebox">')
+    expect(html).toContain('<header class="onebox__source">')
+    expect(html).toContain('<article class="onebox__body">')
+    expect(html).toContain('<h3 class="onebox__title">')
+    expect(html).toContain('IP 质量检测 · ipdata')
+    expect(html).toContain('查询 IP 位置、代理与风险信息，仅供参考')
+    expect(html).toContain('ipdata.co')
+    expect(html).toContain('target="_blank"')
+    expect(html).toContain('rel="noopener noreferrer"')
+    expect(html).not.toContain('onebox-card')
+    expect(html).not.toContain('onebox-card__arrow')
+  })
+
+  it('keeps a link inside normal prose as an inline link', () => {
+    const html = renderSafeMarkdown('需要时可以打开 [ipdata](https://ipdata.co/) 查看。')
+
+    expect(html).toContain('<p>需要时可以打开 <a href="https://ipdata.co/"')
+    expect(html).not.toContain('class="onebox"')
+  })
+
   it('adds an accessible copy control to fenced preformatted text', () => {
     const html = renderSafeMarkdown('```shell\necho hello\n```')
 

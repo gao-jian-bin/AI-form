@@ -84,6 +84,7 @@ const errorMessage = ref('')
 const previewHtml = ref('')
 const mobilePane = ref<'editor' | 'preview'>('editor')
 const textarea = ref<HTMLTextAreaElement | null>(null)
+const previewPane = ref<HTMLElement | null>(null)
 const imageInput = ref<HTMLInputElement | null>(null)
 const composerRoot = ref<HTMLFormElement | null>(null)
 const fullscreen = ref(false)
@@ -144,6 +145,18 @@ async function updatePreview() {
 function schedulePreview() {
   clearTimeout(previewTimer)
   previewTimer = setTimeout(updatePreview, 220)
+}
+
+function syncPreviewScroll() {
+  const input = textarea.value
+  const preview = previewPane.value
+  if (!input || !preview) return
+
+  const inputRange = input.scrollHeight - input.clientHeight
+  const previewRange = preview.scrollHeight - preview.clientHeight
+  preview.scrollTop = inputRange > 0 && previewRange > 0
+    ? (input.scrollTop / inputRange) * previewRange
+    : 0
 }
 
 function draftFields(): ComposerDraftFields {
@@ -739,6 +752,7 @@ onBeforeUnmount(() => {
               required
               placeholder="在这里编写帖子内容…"
               @input="schedulePreview"
+              @scroll="syncPreviewScroll"
               @keydown="handleEditorShortcut"
               @paste="handleImagePaste"
             />
@@ -746,7 +760,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="d-editor-preview-wrapper">
+        <section ref="previewPane" class="d-editor-preview-wrapper">
           <MarkdownContent v-if="previewHtml" class="d-editor-preview" :html="previewHtml" />
           <div v-else class="preview-empty">输入正文后，这里会显示安全预览。</div>
         </section>

@@ -4,8 +4,37 @@ import sanitizeHtml from 'sanitize-html'
 const MARKDOWN_TAGS = [
   'p', 'br', 'strong', 'em', 'del', 'blockquote', 'code', 'pre',
   'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hr',
-  'a', 'img', 'input', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+  'a', 'aside', 'header', 'article', 'img', 'input',
+  'table', 'thead', 'tbody', 'tr', 'th', 'td',
 ]
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+const markdownRenderer = new marked.Renderer()
+const renderParagraph = markdownRenderer.paragraph.bind(markdownRenderer)
+
+markdownRenderer.paragraph = (token) => {
+  const link = token.tokens.length === 1 && token.tokens[0]?.type === 'link'
+    ? token.tokens[0]
+    : null
+  const href = link ? validateExternalUrl(link.href) : null
+  if (!link || !href) return renderParagraph(token)
+
+  const url = new URL(href)
+  const hostname = url.hostname.replace(/^www\./, '')
+  const linkText = link.text.trim()
+  const title = !linkText || linkText === link.href ? hostname : linkText
+  const description = link.title?.trim() || `打开 ${hostname}`
+
+  return `<aside class="onebox"><header class="onebox__source"><a class="onebox__source-link" href="${escapeHtml(href)}" aria-label="${escapeHtml(`访问来源 ${hostname}`)}">${escapeHtml(hostname)}</a></header><article class="onebox__body"><h3 class="onebox__title"><a class="onebox__title-link" href="${escapeHtml(href)}" aria-label="${escapeHtml(`${title}，在新窗口打开`)}">${escapeHtml(title)}</a></h3><p class="onebox__description">${escapeHtml(description)}</p></article></aside>\n`
+}
 
 export function slugifyTopic(title: string): string {
   const slug = title
@@ -55,17 +84,31 @@ export function renderSafeMarkdown(markdown: string): string {
     async: false,
     gfm: true,
     breaks: false,
+    renderer: markdownRenderer,
   })
 
   const safeHtml = sanitizeHtml(rendered, {
     allowedTags: MARKDOWN_TAGS,
     allowedAttributes: {
-      a: ['href', 'title', 'target', 'rel'],
+      a: ['href', 'title', 'target', 'rel', 'class', 'aria-label'],
+      aside: ['class'],
+      header: ['class'],
+      article: ['class'],
+      h3: ['class'],
+      p: ['class'],
       img: ['src', 'alt', 'title', 'loading'],
       input: ['type', 'checked', 'disabled'],
       code: ['class'],
       th: ['align'],
       td: ['align'],
+    },
+    allowedClasses: {
+      a: ['onebox__source-link', 'onebox__title-link'],
+      aside: ['onebox'],
+      header: ['onebox__source'],
+      article: ['onebox__body'],
+      h3: ['onebox__title'],
+      p: ['onebox__description'],
     },
     allowedSchemes: ['http', 'https', 'mailto'],
     transformTags: {

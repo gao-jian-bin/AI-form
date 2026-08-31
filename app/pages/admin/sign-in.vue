@@ -14,7 +14,7 @@ async function signIn() {
   errorMessage.value = ''
   try {
     await $fetch('/api/auth/login', { method: 'POST', body: { password: password.value } })
-    await navigateTo('/studio')
+    await navigateTo('/admin')
   } catch (error: unknown) {
     errorMessage.value = getErrorMessage(error, '无法登录，请稍后再试')
   } finally {

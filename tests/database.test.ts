@@ -18,12 +18,14 @@ import {
   listPublicTopicPage,
   listPublicTopics,
   listRecentFeedTopics,
+  getAnalyticsReport,
   listSitemapTopicMetadata,
   listStudioCategories,
   listStudioTags,
   listTopicMarkdownSources,
   migrateForumDatabase,
   purgeOperationalData,
+  recordPageView,
   recordTopicView,
   restoreTopicRevision,
   saveTopic,
@@ -50,11 +52,11 @@ describe('forum database', () => {
   })
 
   it('applies ordered schema migrations once and records the current version', () => {
-    expect(forumSchemaVersion(db)).toBe(2)
+    expect(forumSchemaVersion(db)).toBe(3)
 
     migrateForumDatabase(db)
 
-    expect(forumSchemaVersion(db)).toBe(2)
+    expect(forumSchemaVersion(db)).toBe(3)
     expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'topic_revisions'").get())
       .toEqual({ name: 'topic_revisions' })
   })
@@ -84,7 +86,7 @@ describe('forum database', () => {
 
       migrateForumDatabase(legacy)
 
-      expect(forumSchemaVersion(legacy)).toBe(2)
+      expect(forumSchemaVersion(legacy)).toBe(3)
       expect(getStudioTopic(legacy, 1)).toEqual(expect.objectContaining({
         title: '旧帖子',
         contentMarkdown: '旧正文',
@@ -528,6 +530,70 @@ describe('forum database', () => {
     expect((db.prepare('SELECT view_count FROM topics WHERE id = ?').get(draft.id) as { view_count: number }).view_count).toBe(0)
   })
 
+  it('records page visits while suppressing rapid refreshes from the same IP and path', () => {
+    const first = new Date('2026-08-30T01:00:00.000Z')
+
+    expect(recordPageView(db, {
+      ipAddress: '203.0.113.8', path: '/t/example/1', userAgent: 'Test Browser', viewedAt: first,
+    })).toBe(true)
+    expect(recordPageView(db, {
+      ipAddress: '203.0.113.8', path: '/t/example/1', userAgent: 'Test Browser',
+      viewedAt: new Date('2026-08-30T01:00:20.000Z'),
+    })).toBe(false)
+    expect(recordPageView(db, {
+      ipAddress: '203.0.113.8', path: '/t/example/1', userAgent: 'Test Browser',
+      viewedAt: new Date('2026-08-30T01:00:31.000Z'),
+    })).toBe(true)
+    expect(recordPageView(db, {
+      ipAddress: '203.0.113.8', path: '/', userAgent: 'Test Browser',
+      viewedAt: new Date('2026-08-30T01:00:20.000Z'),
+    })).toBe(true)
+
+    expect((db.prepare('SELECT COUNT(*) AS count FROM page_views').get() as { count: number }).count).toBe(3)
+  })
+
+  it('summarizes visits and exposes filtered IP details to the administrator', () => {
+    const views = [
+      ['198.51.100.1', '/', '2026-08-30T12:00:00.000Z'],
+      ['198.51.100.1', '/t/hello/1', '2026-08-30T12:01:00.000Z'],
+      ['203.0.113.9', '/t/hello/1', '2026-08-29T12:00:00.000Z'],
+      ['192.0.2.4', '/c/chatgpt', '2026-08-01T12:00:00.000Z'],
+    ] as const
+    for (const [ipAddress, path, viewedAt] of views) {
+      recordPageView(db, { ipAddress, path, userAgent: `Browser ${ipAddress}`, viewedAt: new Date(viewedAt) })
+    }
+
+    const report = getAnalyticsReport(db, {
+      now: new Date('2026-08-30T16:30:00.000Z'),
+      days: 7,
+      query: '198.51.100.1',
+      sort: 'views',
+    })
+
+    expect(report.summary).toEqual({
+      todayViews: 0,
+      todayVisitors: 0,
+      sevenDayViews: 3,
+      sevenDayVisitors: 2,
+      thirtyDayViews: 4,
+      thirtyDayVisitors: 3,
+      totalViews: 4,
+      totalVisitors: 3,
+    })
+    expect(report.visitors).toEqual([{
+      ipAddress: '198.51.100.1',
+      views: 2,
+      firstSeenAt: '2026-08-30T12:00:00.000Z',
+      lastSeenAt: '2026-08-30T12:01:00.000Z',
+      lastPath: '/t/hello/1',
+      userAgent: 'Browser 198.51.100.1',
+    }])
+    expect(report.topPages).toEqual([
+      { path: '/t/hello/1', views: 2, visitors: 2 },
+      { path: '/', views: 1, visitors: 1 },
+    ])
+  })
+
   it('purges expired operational rows without changing aggregate topic views', () => {
     const topic = saveTopic(db, {
       title: '清理测试', categorySlug: 'chatgpt', contentMarkdown: '正文', status: 'published',
@@ -540,12 +606,21 @@ describe('forum database', () => {
     db.prepare('INSERT INTO admin_sessions (token_hash, created_at, expires_at) VALUES (?, ?, ?)')
       .run('active', '2026-08-20T00:00:00.000Z', '2026-09-20T00:00:00.000Z')
 
+    recordPageView(db, {
+      ipAddress: '192.0.2.10', path: '/', userAgent: 'old', viewedAt: new Date('2026-05-01T00:00:00.000Z'),
+    })
+    recordPageView(db, {
+      ipAddress: '192.0.2.11', path: '/', userAgent: 'recent', viewedAt: new Date('2026-08-20T00:00:00.000Z'),
+    })
+
     expect(purgeOperationalData(db, new Date('2026-08-30T00:00:00.000Z'))).toEqual({
       deletedSessions: 1,
       deletedViews: 1,
+      deletedPageViews: 1,
     })
     expect((db.prepare('SELECT COUNT(*) AS count FROM topic_views').get() as { count: number }).count).toBe(1)
     expect((db.prepare('SELECT COUNT(*) AS count FROM admin_sessions').get() as { count: number }).count).toBe(1)
+    expect((db.prepare('SELECT COUNT(*) AS count FROM page_views').get() as { count: number }).count).toBe(1)
     expect(getPublicTopic(db, topic.id)?.viewCount).toBe(2)
   })
 

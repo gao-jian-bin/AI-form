@@ -29,7 +29,7 @@ async function removeCategory(category: StudioCategory) {
         <p>管理左侧分类导航。板块中还有帖子时，需要先移动帖子才能删除。</p>
       </div>
       <div class="dashboard-actions">
-        <NuxtLink to="/studio/categories/new" class="button button-primary">＋ 新建板块</NuxtLink>
+        <NuxtLink to="/admin/categories/new" class="button button-primary">＋ 新建板块</NuxtLink>
       </div>
     </header>
 
@@ -51,7 +51,7 @@ async function removeCategory(category: StudioCategory) {
               <small>{{ category.publishedTopicCount }} 已发布 · {{ category.draftTopicCount }} 草稿</small>
             </td>
             <td class="row-actions">
-              <NuxtLink :to="`/studio/categories/${category.id}/edit`">编辑</NuxtLink>
+              <NuxtLink :to="`/admin/categories/${category.id}/edit`">编辑</NuxtLink>
               <button type="button" @click="removeCategory(category)">删除</button>
             </td>
           </tr>

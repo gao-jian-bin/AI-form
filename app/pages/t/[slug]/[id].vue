@@ -60,7 +60,7 @@ useHead(() => ({
       datePublished: topic.value?.publishedAt || topic.value?.createdAt,
       dateModified: topic.value?.updatedAt,
       mainEntityOfPage: new URL(canonicalPath.value, requestUrl.origin).href,
-      author: { '@type': 'Person', name: '站长' },
+      author: { '@type': 'Person', name: 'JayBing' },
     }),
   }],
 }))
@@ -89,10 +89,12 @@ onMounted(() => {
 
         <div class="post-stream">
           <article class="topic-post">
-            <div class="topic-avatar" aria-hidden="true"><span>站</span></div>
+            <div class="topic-avatar">
+              <img :src="'/avatar.png'" alt="JayBing">
+            </div>
             <div class="topic-body">
               <div class="topic-meta-data">
-                <div class="names"><strong>站长</strong><span>内容维护者</span></div>
+                <div class="names"><strong>JayBing</strong><span>内容维护者</span></div>
                 <div class="post-infos">
                   <span>{{ topic.viewCount }} 次浏览</span>
                   <time :datetime="topic.publishedAt || topic.createdAt">{{ formatDottedDate(topic.publishedAt || topic.createdAt) }}</time>

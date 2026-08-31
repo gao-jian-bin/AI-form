@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test'
 
+test('administrator entry uses /admin and redirects the legacy /studio URL', async ({ page, request }) => {
+  await page.goto('/admin')
+  await expect(page).toHaveURL(/\/admin\/sign-in$/)
+
+  const legacy = await request.get('/studio', { maxRedirects: 0 })
+  expect(legacy.status()).toBe(308)
+  expect(legacy.headers().location).toBe('/admin')
+})
+
 test('category admin API rejects public requests', async ({ request }) => {
   const response = await request.get('/api/studio/categories')
   expect(response.status()).toBe(401)
@@ -11,6 +20,83 @@ test('studio tag API rejects public requests', async ({ request }) => {
 
   const createResponse = await request.post('/api/studio/tags', { data: { name: '未授权标签' } })
   expect(createResponse.status()).toBe(401)
+})
+
+test('traffic analytics accepts public page views but keeps IP details private', async ({ request }) => {
+  const privateResponse = await request.get('/api/studio/analytics')
+  expect(privateResponse.status()).toBe(401)
+
+  const first = await request.post('/api/analytics/view', {
+    data: { path: '/t/analytics-example/999?secret=must-not-be-stored' },
+    headers: { 'user-agent': 'Analytics E2E Browser' },
+  })
+  expect(first.ok()).toBe(true)
+  expect(await first.json()).toEqual({ counted: true })
+
+  const duplicate = await request.post('/api/analytics/view', {
+    data: { path: '/t/analytics-example/999?different=query' },
+    headers: { 'user-agent': 'Analytics E2E Browser' },
+  })
+  expect(await duplicate.json()).toEqual({ counted: false })
+
+  const ignored = await request.post('/api/analytics/view', { data: { path: '/admin' } })
+  expect(await ignored.json()).toEqual({ counted: false })
+
+  await request.post('/api/auth/login', { data: { password: 'ai-forum-local-admin' } })
+  const reportResponse = await request.get('/api/studio/analytics?days=7&query=127.0.0.1&sort=latest')
+  expect(reportResponse.ok()).toBe(true)
+  const report = await reportResponse.json() as {
+    summary: { totalViews: number, totalVisitors: number }
+    visitors: Array<{ ipAddress: string, lastPath: string, userAgent: string }>
+    retentionDays: number
+  }
+  expect(report.summary).toMatchObject({ totalViews: 1, totalVisitors: 1 })
+  expect(report.retentionDays).toBe(90)
+  expect(report.visitors).toEqual([
+    expect.objectContaining({
+      ipAddress: '127.0.0.1',
+      lastPath: '/t/analytics-example/999',
+      userAgent: 'Analytics E2E Browser',
+    }),
+  ])
+})
+
+test('administrator can inspect traffic totals and visitor IPs in the analytics dashboard', async ({ page, request }) => {
+  await request.post('/api/analytics/view', {
+    data: { path: '/c/chatgpt' },
+    headers: { 'user-agent': 'Dashboard E2E Browser' },
+  })
+  await page.request.post('/api/auth/login', { data: { password: 'ai-forum-local-admin' } })
+
+  await page.goto('/admin/analytics')
+
+  await expect(page.getByRole('heading', { name: '访问统计' })).toBeVisible()
+  await expect(page.getByRole('link', { name: '访问统计' })).toHaveClass(/active/)
+  await expect(page.getByText('最近 7 天浏览量')).toBeVisible()
+  await expect(page.getByRole('cell', { name: '127.0.0.1' }).first()).toBeVisible()
+  await expect(page.getByRole('link', { name: '/c/chatgpt' }).first()).toBeVisible()
+  await expect(page.getByText('Dashboard E2E Browser')).toBeVisible()
+})
+
+test('public page navigation is recorded automatically without storing its query string', async ({ page, request }) => {
+  const viewRequest = page.waitForRequest(requestEvent => (
+    requestEvent.method() === 'POST' && requestEvent.url().endsWith('/api/analytics/view')
+  ), { timeout: 5_000 })
+  await page.goto('/search?q=private-search-phrase')
+  await viewRequest
+
+  await request.post('/api/auth/login', { data: { password: 'ai-forum-local-admin' } })
+  const report = await (await request.get('/api/studio/analytics?days=7&query=%2Fsearch')).json() as {
+    visitors: Array<{ lastPath: string }>
+    topPages: Array<{ path: string }>
+  }
+
+  expect(report.visitors).toEqual(expect.arrayContaining([
+    expect.objectContaining({ lastPath: '/search' }),
+  ]))
+  expect(report.topPages).toEqual(expect.arrayContaining([
+    expect.objectContaining({ path: '/search' }),
+  ]))
 })
 
 test('image upload API is private and serves uploaded image bytes publicly', async ({ request }) => {
@@ -83,13 +169,77 @@ test('image upload API rejects files whose bytes are not an allowed image', asyn
 test('public visitors can browse topics without account controls', async ({ page }) => {
   await page.goto('/')
 
-  await expect(page.getByRole('link', { name: 'AI 知识论坛', exact: true })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: '主题' })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: '浏览' })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: '活动' })).toBeVisible()
   await expect(page.getByText('Squoosh：在浏览器里压缩图片').first()).toBeVisible()
   await expect(page.getByText('Squoosh 可以直观比较压缩前后的画质和体积').first()).toHaveCount(0)
   await expect(page.getByRole('link', { name: /登录|注册|发帖/ })).toHaveCount(0)
+})
+
+test('public topic identifies JayBing as the visible author', async ({ page, request }) => {
+  const response = await request.get('/api/topics?pageSize=1')
+  const topicPage = await response.json() as { items: Array<{ id: number, slug: string }> }
+  const topic = topicPage.items[0]!
+
+  await page.goto(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+
+  await expect(page.locator('.topic-meta-data .names strong')).toHaveText('JayBing')
+})
+
+test('public topic displays the author avatar as a rounded square', async ({ page, request }) => {
+  const response = await request.get('/api/topics?pageSize=1')
+  const topicPage = await response.json() as { items: Array<{ id: number, slug: string }> }
+  const topic = topicPage.items[0]!
+
+  await page.goto(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+
+  const avatar = page.locator('.topic-avatar img')
+  await expect(avatar).toBeVisible()
+  await expect(avatar).toHaveJSProperty('complete', true)
+  expect(await avatar.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+  const avatarBox = await avatar.boundingBox()
+  expect(avatarBox).not.toBeNull()
+  expect(avatarBox!.width).toBe(45)
+  expect(avatarBox!.height).toBe(45)
+  await expect(avatar).toHaveCSS('border-radius', '8px')
+  await expect(avatar).toHaveCSS('object-fit', 'cover')
+})
+
+test('public topic keeps the rounded-square author avatar inside the mobile column', async ({ page, request }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const response = await request.get('/api/topics?pageSize=1')
+  const topicPage = await response.json() as { items: Array<{ id: number, slug: string }> }
+  const topic = topicPage.items[0]!
+
+  await page.goto(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+
+  const avatar = page.locator('.topic-avatar img')
+  const avatarBox = await avatar.boundingBox()
+  expect(avatarBox).not.toBeNull()
+  expect(avatarBox!.width).toBe(36)
+  expect(avatarBox!.height).toBe(36)
+})
+
+test('public topic keeps large post images within the Discourse content bounds', async ({ page, request }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const response = await request.get('/api/topics?pageSize=1')
+  const topicPage = await response.json() as { items: Array<{ id: number, slug: string }> }
+  const topic = topicPage.items[0]!
+  await page.goto(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+
+  await page.locator('.markdown-body').evaluate((body) => {
+    const image = document.createElement('img')
+    image.alt = '超大正文图片测试'
+    image.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"%3E%3C/svg%3E'
+    body.appendChild(image)
+  })
+  const image = page.getByAltText('超大正文图片测试')
+  await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).complete)).toBe(true)
+  const imageBox = await image.boundingBox()
+  expect(imageBox).not.toBeNull()
+  expect(imageBox!.width).toBeLessThanOrEqual(690)
+  expect(imageBox!.height).toBeLessThanOrEqual(500)
 })
 
 test('mobile layout opens the source-shaped sidebar without horizontal overflow', async ({ page }) => {
@@ -123,8 +273,8 @@ test('mobile layout opens the source-shaped sidebar without horizontal overflow'
 
 test('owner can create a draft that stays out of the public topic stream', async ({ page }) => {
   const title = `端到端草稿 ${Date.now()}`
-  await page.goto('/studio')
-  await expect(page).toHaveURL(/\/studio\/sign-in$/)
+  await page.goto('/admin')
+  await expect(page).toHaveURL(/\/admin\/sign-in$/)
 
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
@@ -149,7 +299,7 @@ test('owner can create a draft that stays out of the public topic stream', async
   await markdownEditor.fill('# 自动化验收\n\n这篇内容只能在管理工作台看到。')
   await page.getByRole('button', { name: '保存草稿' }).click()
 
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
   await expect(page.getByText(title, { exact: true })).toBeVisible()
 
   await page.goto('/')
@@ -158,10 +308,10 @@ test('owner can create a draft that stays out of the public topic stream', async
 
 test('studio topic actions remain inside the desktop viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   const tableWrap = page.locator('.studio-table-wrap')
   const firstEditLink = page.getByRole('button', { name: /编辑帖子/ }).first()
@@ -180,10 +330,10 @@ test('studio topic actions remain inside the desktop viewport', async ({ page })
 
 test('studio topic actions remain visible on a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   const tableWrap = page.locator('.studio-table-wrap')
   const firstEditLink = page.getByRole('button', { name: /编辑帖子/ }).first()
@@ -204,10 +354,10 @@ test('studio topic actions remain visible on a narrow screen', async ({ page }) 
 
 test('studio edit opens a docked composer without leaving the topic list', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
   const urlBefore = page.url()
 
   const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
@@ -242,7 +392,7 @@ test('studio edit opens a docked composer without leaving the topic list', async
 test('composer renders quotes and keeps long editor panes independently scrollable', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
   const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
@@ -296,10 +446,20 @@ test('composer renders quotes and keeps long editor panes independently scrollab
   )).toBe(true)
   await expect(editor).toHaveCSS('overflow-y', 'scroll')
   await expect(editor).toHaveCSS('scrollbar-gutter', 'stable')
+
+  await editor.evaluate((element) => {
+    const maxScrollTop = element.scrollHeight - element.clientHeight
+    element.scrollTop = maxScrollTop * 0.55
+    element.dispatchEvent(new Event('scroll'))
+  })
+  await expect.poll(() => composer.locator('.d-editor-preview-wrapper').evaluate((element) => {
+    const maxScrollTop = element.scrollHeight - element.clientHeight
+    return maxScrollTop > 0 ? element.scrollTop / maxScrollTop : 0
+  })).toBeGreaterThan(0.5)
 })
 
 test('composer uploads pasted images and inserts their Markdown into the post', async ({ page }) => {
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
   const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
@@ -339,7 +499,7 @@ test('composer uploads pasted images and inserts their Markdown into the post', 
 
 test('composer fills the webpage viewport and exits fullscreen with Escape', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
   await page.getByRole('button', { name: /编辑帖子/ }).first().click()
@@ -359,7 +519,7 @@ test('composer fills the webpage viewport and exits fullscreen with Escape', asy
 
 test('composer grippie resizes the docked editor within viewport bounds', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 })
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
   await page.getByRole('button', { name: /编辑帖子/ }).first().click()
@@ -386,10 +546,10 @@ test('composer grippie resizes the docked editor within viewport bounds', async 
 
 test('mobile composer keeps editing, preview and save controls usable', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
   await publishedRow.getByRole('button', { name: /编辑帖子/ }).click()
@@ -423,10 +583,10 @@ test('mobile composer keeps editing, preview and save controls usable', async ({
 })
 
 test('administrator edits a public topic from its Discourse pencil action', async ({ page }) => {
-  await page.goto('/studio/sign-in')
+  await page.goto('/admin/sign-in')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
   await page.goto('/')
   await page.getByRole('link', { name: 'Squoosh：在浏览器里压缩图片' }).click()
   await expect(page).toHaveURL(/\/t\//)
@@ -445,28 +605,28 @@ test('public visitors never see the topic edit pencil', async ({ page }) => {
 })
 
 test('legacy compatible composer routes open the global composer', async ({ page }) => {
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
-  await page.goto('/studio/topics/1/edit')
-  await expect(page).toHaveURL(/\/studio$/)
+  await page.goto('/admin/topics/1/edit')
+  await expect(page).toHaveURL(/\/admin$/)
   await expect(page.getByRole('dialog', { name: '编辑帖子' })).toBeVisible()
   await page.getByRole('button', { name: '关闭编辑器' }).click()
 
-  await page.goto('/studio/topics/new')
-  await expect(page).toHaveURL(/\/studio$/)
+  await page.goto('/admin/topics/new')
+  await expect(page).toHaveURL(/\/admin$/)
   await expect(page.getByRole('dialog', { name: '创建新帖子' })).toBeVisible()
 })
 
 test('saving the composer refreshes the background topic without navigation', async ({ page }) => {
   const title = `Composer 刷新 ${Date.now()}`
   const updatedTitle = `${title}（已更新）`
-  await page.goto('/studio/sign-in')
+  await page.goto('/admin/sign-in')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   const response = await page.request.post('/api/studio/topics', {
     data: {
@@ -495,10 +655,10 @@ test('saving the composer refreshes the background topic without navigation', as
 })
 
 test('administrator can override a topic publish time in the composer', async ({ page }) => {
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   const publishedRow = page.getByRole('row').filter({ has: page.locator('.status-published') }).first()
   const editedTitle = await publishedRow.locator('td').first().locator('strong').innerText()
@@ -543,10 +703,10 @@ test('administrator can override a topic publish time in the composer', async ({
 })
 
 test('unsaved composer changes require confirmation before closing', async ({ page }) => {
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   await page.getByRole('button', { name: /编辑帖子/ }).first().click()
   const composer = page.getByRole('dialog', { name: '编辑帖子' })
@@ -566,10 +726,10 @@ test('unsaved composer changes require confirmation before closing', async ({ pa
 })
 
 test('failed composer save keeps the editor and entered content', async ({ page }) => {
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   await page.getByRole('button', { name: /编辑帖子/ }).first().click()
   const composer = page.getByRole('dialog', { name: '编辑帖子' })
@@ -596,10 +756,10 @@ test('failed composer save keeps the editor and entered content', async ({ page 
 })
 
 test('unsaved composer changes require confirmation before route navigation', async ({ page }) => {
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   await page.getByRole('button', { name: /编辑帖子/ }).first().click()
   const composer = page.getByRole('dialog', { name: '编辑帖子' })
@@ -608,7 +768,7 @@ test('unsaved composer changes require confirmation before route navigation', as
 
   page.once('dialog', dialog => dialog.dismiss())
   await page.getByRole('link', { name: /查看网站/ }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
   await expect(composer).toBeVisible()
 
   page.once('dialog', dialog => dialog.accept())
@@ -625,10 +785,10 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   const updatedCategoryName = `AI 图像 ${suffix}`
   const draftTitle = `AI 图像草稿 ${suffix}`
 
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   await page.getByRole('link', { name: '板块管理' }).click()
   await page.getByRole('link', { name: '＋ 新建板块' }).click()
@@ -638,7 +798,7 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   await page.getByLabel('板块颜色').fill('#7c3aed')
   await page.getByLabel('显示顺序').fill('3')
   await page.getByRole('button', { name: '创建板块' }).click()
-  await expect(page).toHaveURL(/\/studio\/categories$/)
+  await expect(page).toHaveURL(/\/admin\/categories$/)
   await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
 
   await page.getByRole('link', { name: '帖子管理' }).click()
@@ -648,7 +808,7 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   await page.getByLabel('外部网站地址').fill('https://example.com/ai-image')
   await page.getByLabel('正文 · Markdown').fill('这是一篇放在动态板块中的草稿。')
   await page.getByRole('button', { name: '保存草稿' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   await page.getByRole('link', { name: '板块管理' }).click()
   const categoryRow = page.getByRole('row').filter({ hasText: categorySlug })
@@ -678,10 +838,10 @@ test('owner can manage tags, select one, and the chooser closes after selection'
   const renamedTag = `${originalName} 已改`
   const topicTitle = `标签管理验收 ${Date.now()}`
 
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
   const missingUpdate = await page.request.put('/api/studio/tags/999999999', {
     data: { name: '不存在的标签' },
   })
@@ -752,7 +912,7 @@ test('public routes send security headers, real 404s, canonical redirects, sitem
 
 test('composer recovers a newer browser-local draft only after administrator approval', async ({ page }) => {
   const title = `本机恢复 ${Date.now()}`
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
   await page.getByRole('button', { name: '＋ 新建帖子' }).click()
@@ -775,10 +935,10 @@ test('administrator can inspect and restore a saved topic revision', async ({ pa
   const suffix = Date.now()
   const firstTitle = `历史版本一 ${suffix}`
   const secondTitle = `历史版本二 ${suffix}`
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
 
   const createdResponse = await page.request.post('/api/studio/topics', {
     data: {
@@ -835,10 +995,10 @@ test('administrator can inspect and restore a saved topic revision', async ({ pa
 })
 
 test('image management deletes an unreferenced upload from the studio', async ({ page }) => {
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
   const imageBytes = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
     'base64',
@@ -850,7 +1010,7 @@ test('image management deletes an unreferenced upload from the studio', async ({
   const stored = await upload.json() as { url: string }
   const uploadPath = stored.url.replace('/uploads/', '')
 
-  await page.goto('/studio/uploads')
+  await page.goto('/admin/uploads')
   const card = page.locator('.media-card').filter({ hasText: uploadPath })
   await expect(card).toBeVisible()
   await expect(card).toContainText('未使用，可清理')
@@ -862,10 +1022,10 @@ test('image management deletes an unreferenced upload from the studio', async ({
 
 test('public topic navigation reaches posts beyond the first page', async ({ page }) => {
   const tagName = `pagination-${Date.now()}`
-  await page.goto('/studio')
+  await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await expect(page).toHaveURL(/\/studio$/)
+  await expect(page).toHaveURL(/\/admin$/)
   for (let index = 1; index <= 31; index += 1) {
     const response = await page.request.post('/api/studio/topics', {
       data: {

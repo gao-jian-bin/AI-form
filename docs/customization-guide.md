@@ -34,7 +34,7 @@ app/components/ForumSidebar.vue
 - `最新帖子`
 - `分类`
 
-具体板块名称不是写在这里的，它们从数据库动态读取。请登录 `/studio/categories` 新增、改名、排序或删除板块。
+具体板块名称不是写在这里的，它们从数据库动态读取。请登录 `/admin/categories` 新增、改名、排序或删除板块。
 
 顶部搜索不在这个文件中，而在 `SiteHeader.vue`。目前只删除了侧栏搜索，顶部搜索仍然保留。
 
@@ -43,7 +43,7 @@ app/components/ForumSidebar.vue
 日常管理不需要改源码。打开：
 
 ```text
-http://localhost:3000/studio/categories
+http://localhost:3000/admin/categories
 ```
 
 这里可以修改名称、说明、颜色和排序，也可以新增或删除空板块。板块的网址标识在创建后锁定，避免旧地址失效。
@@ -59,7 +59,7 @@ server/utils/database.ts
 板块功能的源码分工如下：
 
 ```text
-app/pages/studio/categories/       管理页面
+app/pages/admin/categories/        管理页面
 app/components/CategoryEditor.vue  新建和编辑表单
 server/api/studio/categories/      管理员 API
 server/utils/validation.ts         输入格式校验

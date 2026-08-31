@@ -25,7 +25,7 @@ async function save() {
       method: props.category ? 'PUT' : 'POST',
       body: form,
     })
-    await navigateTo('/studio/categories')
+    await navigateTo('/admin/categories')
   } catch (error: unknown) {
     errorMessage.value = getErrorMessage(error, '保存失败，请检查输入后重试')
   } finally {
@@ -43,7 +43,7 @@ async function save() {
         <p>{{ category ? '修改访客看到的板块信息，网址标识会保持不变。' : '创建一个新的内容分区，随后就能在里面发布帖子。' }}</p>
       </div>
       <div class="editor-actions">
-        <NuxtLink to="/studio/categories" class="button button-quiet">返回板块管理</NuxtLink>
+        <NuxtLink to="/admin/categories" class="button button-quiet">返回板块管理</NuxtLink>
       </div>
     </header>
 
@@ -92,7 +92,7 @@ async function save() {
           <button class="button button-primary" type="submit" :disabled="busy">
             {{ busy ? '正在保存…' : category ? '保存修改' : '创建板块' }}
           </button>
-          <NuxtLink to="/studio/categories" class="button button-quiet">取消</NuxtLink>
+          <NuxtLink to="/admin/categories" class="button button-quiet">取消</NuxtLink>
         </div>
       </form>
 

@@ -50,7 +50,7 @@ npm.cmd run dev
 ai-forum-local-admin
 ```
 
-管理入口：<http://localhost:3000/studio/sign-in>
+管理入口：<http://localhost:3000/admin/sign-in>
 
 该默认值只在非生产环境生效。生产环境没有管理员密码配置时，登录接口会拒绝工作。
 
@@ -184,9 +184,9 @@ curl http://127.0.0.1:3000/api/health
 2. 选择 `cloudflared`，按页面给出的 Debian/Ubuntu 命令在服务器安装连接器。页面命令中的 Token 属于密码，不能发给我或截图公开。
 3. 在 Tunnel 的 **Public Hostname** 中填写你的域名或子域名，例如 `www.example.com`。
 4. Service 类型选择 `HTTP`，地址填写 `http://localhost:3000`。
-5. 保存后 Cloudflare 会自动建立对应 DNS 路由。访问 `https://你的域名` 验证首页，再访问 `/studio/sign-in` 验证管理入口。
+5. 保存后 Cloudflare 会自动建立对应 DNS 路由。访问 `https://你的域名` 验证首页，再访问 `/admin/sign-in` 验证管理入口。
 
-Cloudflare 中再开启 **Always Use HTTPS**。不要给本站启用“Cache Everything”；`/studio/*`、`/api/studio/*`、`/api/auth/*` 必须保持不缓存。Nuxt 官方也建议关闭 Cloudflare 的 Rocket Loader 和 Email Address Obfuscation，避免页面 hydration 被改写；参见 [Nuxt 部署说明](https://nuxt.com/docs/4.x/getting-started/deployment)。登录接口可以在 Cloudflare WAF 中额外限制 `/api/auth/login` 的请求频率。
+Cloudflare 中再开启 **Always Use HTTPS**。不要给本站启用“Cache Everything”；`/admin/*`、`/api/studio/*`、`/api/auth/*` 必须保持不缓存。Nuxt 官方也建议关闭 Cloudflare 的 Rocket Loader 和 Email Address Obfuscation，避免页面 hydration 被改写；参见 [Nuxt 部署说明](https://nuxt.com/docs/4.x/getting-started/deployment)。登录接口可以在 Cloudflare WAF 中额外限制 `/api/auth/login` 的请求频率。
 
 如果以后不用 Tunnel，而改用 Nginx/Caddy，则只把它反向代理到 `127.0.0.1:3000`，Cloudflare SSL 模式使用 **Full (strict)**；不要让公网直接访问 `服务器IP:3000`。
 
@@ -285,5 +285,5 @@ npm.cmd run test:e2e
 - 已设置正式 `SITE_URL`
 - 已设置 `ADMIN_PASSWORD_HASH` 和随机 `VIEW_HASH_SECRET`
 - 公共首页没有登录、注册和发帖入口
-- `/studio` 未登录时会跳转至 `/studio/sign-in`
+- `/admin` 未登录时会跳转至 `/admin/sign-in`，旧的 `/studio` 地址只负责兼容跳转
 - HTTPS、服务器防火墙和定期备份已经启用

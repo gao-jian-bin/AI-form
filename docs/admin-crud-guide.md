@@ -25,7 +25,7 @@ npm.cmd run dev
 打开：
 
 ```text
-http://localhost:3000/studio/sign-in
+http://localhost:3000/admin/sign-in
 ```
 
 本地没有配置管理员密码时，开发密码是：
@@ -171,13 +171,13 @@ Docker 服务器备份步骤在项目 `README.md` 的“数据备份与恢复”
 
 | 文件或目录 | 负责什么 |
 |---|---|
-| `app/pages/studio/index.vue` | 帖子管理列表 |
+| `app/pages/admin/index.vue` | 帖子管理列表 |
 | `app/components/AdminComposerHost.vue` | 全站底部编辑器的加载、关闭和未保存保护 |
 | `app/composables/useAdminComposer.ts` | 打开、收起、保存刷新等 Composer 状态 |
 | `app/components/TopicEditor.vue` | 帖子表单、Markdown 编辑和预览 |
 | `app/components/TagChooser.vue` | 已知标签罗列、搜索、创建和删除选择 |
 | `app/pages/t/[slug]/[id].vue` | 公开帖子页和管理员小铅笔入口 |
-| `app/pages/studio/categories/` | 板块管理页面 |
+| `app/pages/admin/categories/` | 板块管理页面 |
 | `app/components/CategoryEditor.vue` | 板块表单 |
 | `app/layouts/studio.vue` | 后台顶部导航 |
 | `server/api/studio/topics/` | 帖子管理接口 |

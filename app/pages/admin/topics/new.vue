@@ -6,7 +6,7 @@ const { openNew } = useAdminComposer()
 
 onMounted(async () => {
   openNew()
-  await navigateTo('/studio', { replace: true })
+  await navigateTo('/admin', { replace: true })
 })
 </script>
 

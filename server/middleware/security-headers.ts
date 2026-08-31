@@ -3,7 +3,9 @@ import { securityHeaders } from '../utils/security'
 
 export default defineEventHandler((event) => {
   const path = getRequestURL(event).pathname
-  const privateRoute = path === '/studio'
+  const privateRoute = path === '/admin'
+    || path.startsWith('/admin/')
+    || path === '/studio'
     || path.startsWith('/studio/')
     || path.startsWith('/api/studio/')
     || path.startsWith('/api/auth/')

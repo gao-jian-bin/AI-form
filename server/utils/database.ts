@@ -89,6 +89,56 @@ export interface TopicRevision {
   createdAt: string
 }
 
+export type AnalyticsSort = 'latest' | 'views'
+
+export interface PageViewInput {
+  ipAddress: string
+  path: string
+  userAgent: string
+  viewedAt?: Date
+}
+
+export interface AnalyticsSummary {
+  todayViews: number
+  todayVisitors: number
+  sevenDayViews: number
+  sevenDayVisitors: number
+  thirtyDayViews: number
+  thirtyDayVisitors: number
+  totalViews: number
+  totalVisitors: number
+}
+
+export interface AnalyticsVisitor {
+  ipAddress: string
+  views: number
+  firstSeenAt: string
+  lastSeenAt: string
+  lastPath: string
+  userAgent: string
+}
+
+export interface AnalyticsPage {
+  path: string
+  views: number
+  visitors: number
+}
+
+export interface AnalyticsReport {
+  summary: AnalyticsSummary
+  visitors: AnalyticsVisitor[]
+  topPages: AnalyticsPage[]
+  retentionDays: number
+}
+
+export interface AnalyticsReportOptions {
+  now?: Date
+  days?: 1 | 7 | 30 | 90
+  query?: string
+  sort?: AnalyticsSort
+  limit?: number
+}
+
 export interface PublicTopicPage {
   items: TopicRecord[]
   page: number
@@ -188,7 +238,7 @@ export function createForumDatabase(filename: string): Database.Database {
   return db
 }
 
-const FORUM_SCHEMA_VERSION = 2
+const FORUM_SCHEMA_VERSION = 3
 
 interface ForumMigration {
   version: number
@@ -289,6 +339,26 @@ const FORUM_MIGRATIONS: ForumMigration[] = [
 
         CREATE INDEX IF NOT EXISTS idx_topic_revisions_topic
           ON topic_revisions(topic_id, id DESC);
+      `)
+    },
+  },
+  {
+    version: 3,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS page_views (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ip_address TEXT NOT NULL,
+          path TEXT NOT NULL,
+          user_agent TEXT NOT NULL DEFAULT '',
+          viewed_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_page_views_viewed_at
+          ON page_views(viewed_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_page_views_ip_path
+          ON page_views(ip_address, path, viewed_at DESC);
       `)
     },
   },
@@ -1002,16 +1072,143 @@ export function recordTopicView(
   return true
 }
 
+export function recordPageView(
+  db: Database.Database,
+  input: PageViewInput,
+  dedupeSeconds = 30,
+): boolean {
+  const viewedAt = input.viewedAt || new Date()
+  const cutoff = new Date(viewedAt.getTime() - dedupeSeconds * 1000).toISOString()
+  const existing = db.prepare(`
+    SELECT id FROM page_views
+    WHERE ip_address = ? AND path = ? AND viewed_at >= ?
+    LIMIT 1
+  `).get(input.ipAddress, input.path, cutoff)
+  if (existing) return false
+
+  db.prepare(`
+    INSERT INTO page_views (ip_address, path, user_agent, viewed_at)
+    VALUES (?, ?, ?, ?)
+  `).run(input.ipAddress, input.path, input.userAgent, viewedAt.toISOString())
+  return true
+}
+
+function startOfShanghaiDay(date: Date): Date {
+  const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000
+  const shifted = new Date(date.getTime() + SHANGHAI_OFFSET_MS)
+  shifted.setUTCHours(0, 0, 0, 0)
+  return new Date(shifted.getTime() - SHANGHAI_OFFSET_MS)
+}
+
+export function getAnalyticsReport(
+  db: Database.Database,
+  options: AnalyticsReportOptions = {},
+): AnalyticsReport {
+  const now = options.now || new Date()
+  const days = options.days || 7
+  const query = options.query?.trim().slice(0, 100) || ''
+  const limit = Math.max(1, Math.min(options.limit || 100, 500))
+  const todayCutoff = startOfShanghaiDay(now).toISOString()
+  const sevenDayCutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const thirtyDayCutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const selectedCutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString()
+
+  const rawSummary = db.prepare(`
+    SELECT
+      COUNT(CASE WHEN viewed_at >= ? THEN 1 END) AS today_views,
+      COUNT(DISTINCT CASE WHEN viewed_at >= ? THEN ip_address END) AS today_visitors,
+      COUNT(CASE WHEN viewed_at >= ? THEN 1 END) AS seven_day_views,
+      COUNT(DISTINCT CASE WHEN viewed_at >= ? THEN ip_address END) AS seven_day_visitors,
+      COUNT(CASE WHEN viewed_at >= ? THEN 1 END) AS thirty_day_views,
+      COUNT(DISTINCT CASE WHEN viewed_at >= ? THEN ip_address END) AS thirty_day_visitors,
+      COUNT(*) AS total_views,
+      COUNT(DISTINCT ip_address) AS total_visitors
+    FROM page_views
+  `).get(
+    todayCutoff, todayCutoff,
+    sevenDayCutoff, sevenDayCutoff,
+    thirtyDayCutoff, thirtyDayCutoff,
+  ) as Record<string, number>
+
+  const queryPattern = `%${query}%`
+  const queryClause = query ? 'AND (ip_address LIKE ? OR path LIKE ?)' : ''
+  const visitorParams: Array<string | number> = [selectedCutoff]
+  if (query) visitorParams.push(queryPattern, queryPattern)
+  visitorParams.push(limit)
+  const orderBy = options.sort === 'views'
+    ? 'views DESC, last_seen_at DESC'
+    : 'last_seen_at DESC, views DESC'
+
+  const visitorRows = db.prepare(`
+    WITH filtered_views AS (
+      SELECT * FROM page_views
+      WHERE viewed_at >= ? ${queryClause}
+    ), ranked_views AS (
+      SELECT *, ROW_NUMBER() OVER (
+        PARTITION BY ip_address ORDER BY viewed_at DESC, id DESC
+      ) AS row_number
+      FROM filtered_views
+    )
+    SELECT
+      ip_address,
+      COUNT(*) AS views,
+      MIN(viewed_at) AS first_seen_at,
+      MAX(viewed_at) AS last_seen_at,
+      MAX(CASE WHEN row_number = 1 THEN path END) AS last_path,
+      MAX(CASE WHEN row_number = 1 THEN user_agent END) AS user_agent
+    FROM ranked_views
+    GROUP BY ip_address
+    ORDER BY ${orderBy}
+    LIMIT ?
+  `).all(...visitorParams) as Array<Record<string, string | number>>
+
+  const topPages = db.prepare(`
+    SELECT path, COUNT(*) AS views, COUNT(DISTINCT ip_address) AS visitors
+    FROM page_views
+    WHERE viewed_at >= ?
+    GROUP BY path
+    ORDER BY views DESC, path ASC
+    LIMIT 10
+  `).all(selectedCutoff) as Array<{ path: string; views: number; visitors: number }>
+
+  return {
+    summary: {
+      todayViews: rawSummary.today_views || 0,
+      todayVisitors: rawSummary.today_visitors || 0,
+      sevenDayViews: rawSummary.seven_day_views || 0,
+      sevenDayVisitors: rawSummary.seven_day_visitors || 0,
+      thirtyDayViews: rawSummary.thirty_day_views || 0,
+      thirtyDayVisitors: rawSummary.thirty_day_visitors || 0,
+      totalViews: rawSummary.total_views || 0,
+      totalVisitors: rawSummary.total_visitors || 0,
+    },
+    visitors: visitorRows.map(row => ({
+      ipAddress: String(row.ip_address),
+      views: Number(row.views),
+      firstSeenAt: String(row.first_seen_at),
+      lastSeenAt: String(row.last_seen_at),
+      lastPath: String(row.last_path),
+      userAgent: String(row.user_agent),
+    })),
+    topPages,
+    retentionDays: 90,
+  }
+}
+
 export function purgeOperationalData(
   db: Database.Database,
   now = new Date(),
   viewRetentionDays = 30,
-): { deletedSessions: number; deletedViews: number } {
+  pageViewRetentionDays = 90,
+): { deletedSessions: number; deletedViews: number; deletedPageViews: number } {
   const viewCutoff = new Date(now.getTime() - viewRetentionDays * 24 * 60 * 60 * 1000).toISOString()
+  const pageViewCutoff = new Date(now.getTime() - pageViewRetentionDays * 24 * 60 * 60 * 1000).toISOString()
   return db.transaction(() => ({
     deletedSessions: db.prepare('DELETE FROM admin_sessions WHERE expires_at <= ?')
       .run(now.toISOString()).changes,
     deletedViews: db.prepare('DELETE FROM topic_views WHERE viewed_at < ?')
       .run(viewCutoff).changes,
+    deletedPageViews: db.prepare('DELETE FROM page_views WHERE viewed_at < ?')
+      .run(pageViewCutoff).changes,
   }))()
 }

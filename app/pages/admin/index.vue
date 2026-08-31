@@ -39,7 +39,7 @@ async function removeTopic(topic: StudioTopic) {
 
 async function signOut() {
   await $fetch('/api/auth/logout', { method: 'POST' })
-  await navigateTo('/studio/sign-in')
+  await navigateTo('/admin/sign-in')
 }
 </script>
 

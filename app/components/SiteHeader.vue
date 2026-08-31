@@ -55,7 +55,7 @@ onMounted(() => {
           </button>
 
           <div class="title">
-            <NuxtLink id="site-text-logo" to="/">AI 知识论坛</NuxtLink>
+            <NuxtLink id="site-text-logo" to="/"></NuxtLink>
           </div>
 
           <div class="panel">
