@@ -526,6 +526,7 @@ test('composer grippie resizes the docked editor within viewport bounds', async 
 
   const root = page.locator('#reply-control')
   const grippie = page.getByRole('separator', { name: '调整编辑器高度' })
+  await expect(grippie).toBeVisible()
   const before = await root.boundingBox()
   const handle = await grippie.boundingBox()
   expect(before).not.toBeNull()
