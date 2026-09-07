@@ -12,7 +12,7 @@ describe('buildSitemapXml', () => {
     expect(xml).toContain('<loc>https://forum.example.com/</loc>')
     expect(xml).toContain('<loc>https://forum.example.com/c/chatgpt</loc>')
     expect(xml).toContain('<loc>https://forum.example.com/tag/%E5%B7%A5%E4%BD%9C%E6%B5%81</loc>')
-    expect(xml).toContain('<loc>https://forum.example.com/t/%E6%8F%90%E7%A4%BA%E8%AF%8D-%26-%E5%B7%A5%E5%85%B7/7</loc>')
+    expect(xml).toContain('<loc>https://forum.example.com/t/7</loc>')
     expect(xml).toContain('<lastmod>2026-08-20T08:00:00.000Z</lastmod>')
     expect(xml).not.toContain('draft')
   })
@@ -37,7 +37,7 @@ describe('buildAtomFeedXml', () => {
     expect(xml).toContain('<subtitle>知识 &lt;聚合&gt;</subtitle>')
     expect(xml).toContain('<title>Markdown &amp; ChatGPT</title>')
     expect(xml).toContain('<summary type="text">使用 &lt;代码&gt; 与引用。</summary>')
-    expect(xml).toContain('href="https://forum.example.com/t/markdown-%E6%8A%80%E5%B7%A7/8"')
+    expect(xml).toContain('href="https://forum.example.com/t/8"')
     expect(xml).not.toContain('<代码>')
   })
 

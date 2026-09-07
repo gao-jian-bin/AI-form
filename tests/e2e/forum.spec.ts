@@ -184,7 +184,22 @@ test('public topic identifies JayBing as the visible author', async ({ page, req
 
   await page.goto(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
 
+  await expect(page).toHaveURL(new RegExp(`/t/${topic.id}$`))
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', new RegExp(`/t/${topic.id}$`))
+  await expect(page.locator('.post-number')).toHaveText(`#${topic.id}`)
   await expect(page.locator('.topic-meta-data .names strong')).toHaveText('JayBing')
+})
+
+test('topic list links navigate to numeric URLs and survive reload', async ({ page }) => {
+  await page.goto('/')
+  const link = page.locator('[data-topic-title]').first()
+  const href = await link.getAttribute('href')
+  expect(href).toMatch(/^\/t\/[1-9]\d*$/)
+  await link.click()
+  await expect(page).toHaveURL(new RegExp(`${href}$`))
+  await expect(page.locator('#topic-title h1')).toBeVisible()
+  await page.reload()
+  await expect(page.locator('#topic-title h1')).toBeVisible()
 })
 
 test('public topic displays the author avatar as a rounded square', async ({ page, request }) => {
@@ -901,11 +916,24 @@ test('public routes send security headers, real 404s, canonical redirects, sitem
   const topic = topicPage.items[0]!
   const wrongSlug = await request.get(`/t/not-the-real-slug/${topic.id}`, { maxRedirects: 0 })
   expect(wrongSlug.status()).toBe(301)
-  expect(wrongSlug.headers().location).toContain(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+  expect(wrongSlug.headers().location).toBe(`/t/${topic.id}`)
+
+  const legacy = await request.get(`/t/${encodeURIComponent(topic.slug)}/${topic.id}?from=bookmark`, { maxRedirects: 0 })
+  expect(legacy.status()).toBe(301)
+  expect(legacy.headers().location).toBe(`/t/${topic.id}?from=bookmark`)
+
+  const canonical = await request.get(`/t/${topic.id}`, { maxRedirects: 0 })
+  expect(canonical.status()).toBe(200)
+  const html = await canonical.text()
+  expect(html).toContain(`/t/${topic.id}`)
+  expect(html).toContain(`class="post-number">#${topic.id}</span>`)
+  for (const path of ['/t/0', '/t/1.5', '/t/1e0', '/t/9007199254740992', '/t/999999999', '/t/missing/999999999']) {
+    expect((await request.get(path)).status()).toBe(404)
+  }
 
   const sitemap = await request.get('/sitemap.xml')
   expect(sitemap.headers()['content-type']).toContain('application/xml')
-  expect(await sitemap.text()).toContain(`/t/${encodeURIComponent(topic.slug)}/${topic.id}`)
+  expect(await sitemap.text()).toContain(`/t/${topic.id}</loc>`)
   const feed = await request.get('/feed.xml')
   expect(feed.headers()['content-type']).toContain('application/atom+xml')
   expect(await feed.text()).toContain('<feed xmlns="http://www.w3.org/2005/Atom">')

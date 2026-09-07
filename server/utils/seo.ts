@@ -43,7 +43,7 @@ function baseSiteUrl(siteUrl: string): string {
 }
 
 function topicUrl(baseUrl: string, topic: Pick<SitemapTopic, 'id' | 'slug'>): string {
-  return `${baseUrl}/t/${encodeURIComponent(topic.slug)}/${topic.id}`
+  return `${baseUrl}/t/${topic.id}`
 }
 
 function sitemapEntry(location: string, lastModified?: string): string {

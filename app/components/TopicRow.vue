@@ -5,7 +5,7 @@ import { formatDottedDate } from '../utils/date-format'
 
 const props = defineProps<{ topic: TopicSummary; availableTags?: ForumTag[] }>()
 
-const topicUrl = computed(() => `/t/${props.topic.slug}/${props.topic.id}`)
+const topicUrl = computed(() => `/t/${props.topic.id}`)
 const externalHost = computed(() => {
   if (!props.topic.externalUrl) return ''
   try {
