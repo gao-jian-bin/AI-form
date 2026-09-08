@@ -19,6 +19,10 @@ const fields: ComposerDraftFields = {
 }
 
 describe('composer draft recovery', () => {
+  it('preserves an explicit view count in recovered drafts', () => {
+    const draft = serializeComposerDraft({ ...fields, viewCount: '0' })
+    expect(parseComposerDraft(draft)?.fields.viewCount).toBe('0')
+  })
   it('isolates new posts and existing topics with stable storage keys', () => {
     expect(composerDraftKey()).toBe('ai-forum:composer-draft:new')
     expect(composerDraftKey(12)).toBe('ai-forum:composer-draft:topic:12')

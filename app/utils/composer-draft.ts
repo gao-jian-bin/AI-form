@@ -8,6 +8,7 @@ export interface ComposerDraftFields {
   externalUrl: string
   isPinned: boolean
   publishedAt: string
+  viewCount?: string
 }
 
 export interface ComposerDraft {
@@ -52,6 +53,7 @@ function parseFields(value: unknown): ComposerDraftFields | null {
   ] as const
   if (stringFields.some(field => typeof value[field] !== 'string')) return null
   if (typeof value.isPinned !== 'boolean') return null
+  if (value.viewCount !== undefined && typeof value.viewCount !== 'string') return null
   if (!Array.isArray(value.tags) || value.tags.some(tag => typeof tag !== 'string')) return null
 
   return {
@@ -64,6 +66,7 @@ function parseFields(value: unknown): ComposerDraftFields | null {
     externalUrl: value.externalUrl as string,
     isPinned: value.isPinned,
     publishedAt: value.publishedAt as string,
+    ...(typeof value.viewCount === 'string' ? { viewCount: value.viewCount } : {}),
   }
 }
 

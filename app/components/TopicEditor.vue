@@ -75,6 +75,7 @@ const form = reactive({
   externalUrl: props.topic?.externalUrl || '',
   isPinned: props.topic?.isPinned || false,
   publishedAt: initialPublishedAt,
+  viewCount: '',
 })
 const initialSnapshot = JSON.stringify(form)
 const hasUnsavedChanges = computed(() => JSON.stringify(form) !== initialSnapshot)
@@ -170,6 +171,7 @@ function draftFields(): ComposerDraftFields {
     externalUrl: form.externalUrl,
     isPinned: form.isPinned,
     publishedAt: form.publishedAt,
+    viewCount: form.viewCount,
   }
 }
 
@@ -549,7 +551,7 @@ async function save(status: 'draft' | 'published') {
       : null
     const saved = await $fetch<StudioTopic>(endpoint, {
       method: props.topic ? 'PUT' : 'POST',
-      body: { ...form, publishedAt, status },
+      body: { ...form, viewCount: form.viewCount.trim() === '' ? undefined : Number(form.viewCount), publishedAt, status },
     })
     clearLocalDraft(true)
     emit('dirty-change', false)
@@ -685,6 +687,10 @@ onBeforeUnmount(() => {
               <label class="field">
                 <span>Slug <small>仅创建时生效</small></span>
                 <input v-model="form.slug" maxlength="160" placeholder="留空自动生成">
+              </label>
+              <label class="field">
+                <span>设置浏览量 <small>当前 {{ props.topic?.viewCount ?? 0 }}，留空不修改</small></span>
+                <input v-model="form.viewCount" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="16" placeholder="填写非负整数，后续访问继续累加">
               </label>
               <label class="field">
                 <span>摘要 <small>留空从正文提取</small></span>

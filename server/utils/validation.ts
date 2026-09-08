@@ -24,6 +24,8 @@ const rawTopicSchema = z.object({
   status: z.enum(['draft', 'published']),
   isPinned: z.boolean().default(false),
   externalUrl: z.string().nullish(),
+  viewCount: z.number().int('浏览量必须是整数').min(0, '浏览量不能小于 0')
+    .max(Number.MAX_SAFE_INTEGER, '浏览量过大').optional(),
   publishedAt: z.string().datetime({ offset: true }).nullish()
     .refine(value => !value || new Date(value).getTime() <= Date.now(), '发布时间不能晚于当前时间'),
 })
@@ -55,6 +57,7 @@ export function parseTopicPayload(value: unknown): ParsedTopicPayload {
   if (parsed.slug) result.slug = parsed.slug
   if (parsed.excerpt) result.excerpt = parsed.excerpt
   if (parsed.publishedAt) result.publishedAt = parsed.publishedAt
+  if (parsed.viewCount !== undefined) result.viewCount = parsed.viewCount
   return result
 }
 

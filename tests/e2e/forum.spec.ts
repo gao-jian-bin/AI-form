@@ -718,6 +718,41 @@ test('administrator can override a topic publish time in the composer', async ({
   await expect(page.locator(`[data-topic-id="${saved.id}"] td.activity time`)).toHaveText('2024.01.02')
 })
 
+test('administrator can set view counts while ordinary edits preserve new visits', async ({ page, request }) => {
+  const payload = {
+    title: `浏览量设置 ${Date.now()}`, categorySlug: 'chatgpt', contentMarkdown: '浏览量设置测试正文',
+    status: 'published', tags: [], viewCount: 12,
+  }
+  expect((await request.post('/api/studio/topics', { data: payload })).status()).toBe(401)
+  await page.request.post('/api/auth/login', { data: { password: 'ai-forum-local-admin' } })
+  const topic = await (await page.request.post('/api/studio/topics', { data: payload })).json() as { id: number, viewCount: number }
+  expect(topic.viewCount).toBe(12)
+  expect((await request.put(`/api/studio/topics/${topic.id}`, { data: { ...payload, viewCount: 999 } })).status()).toBe(401)
+  await page.goto('/admin')
+  const row = page.getByRole('row').filter({ hasText: payload.title })
+  const composer = page.getByRole('dialog', { name: '编辑帖子' })
+
+  for (const count of ['432', '', '0']) {
+    await row.getByRole('button', { name: /编辑帖子/ }).click()
+    await composer.getByText('更多设置').click()
+    const field = composer.getByLabel('设置浏览量')
+    await expect(field).toHaveValue('')
+    if (count === '') {
+      await request.post(`/api/topics/${topic.id}/view`)
+    } else {
+      await field.fill(count)
+    }
+    const savedResponse = page.waitForResponse(response => response.request().method() === 'PUT'
+      && new URL(response.url()).pathname === `/api/studio/topics/${topic.id}`)
+    await composer.getByRole('button', { name: '保存修改' }).click()
+    const saved = await (await savedResponse).json() as { viewCount: number }
+    expect(saved.viewCount).toBe(count === '' ? 433 : Number(count))
+    await expect(composer).toBeHidden()
+    const publicTopic = await (await request.get(`/api/topics/${topic.id}`)).json()
+    expect(publicTopic.viewCount).toBe(saved.viewCount)
+  }
+})
+
 test('unsaved composer changes require confirmation before closing', async ({ page }) => {
   await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')

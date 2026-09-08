@@ -18,6 +18,7 @@ export interface TopicInput {
   isPinned: boolean
   externalUrl: string | null
   publishedAt?: string | null
+  viewCount?: number
 }
 
 export interface ForumCategory {
@@ -906,6 +907,9 @@ function topicWouldChange(
 }
 
 export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord {
+  if (input.viewCount !== undefined && (!Number.isSafeInteger(input.viewCount) || input.viewCount < 0)) {
+    throw new Error('浏览量必须是非负安全整数')
+  }
   const title = input.title.trim()
   const contentMarkdown = input.contentMarkdown.trim()
   if (!title) throw new Error('标题不能为空')
@@ -992,6 +996,9 @@ export function saveTopic(db: Database.Database, input: TopicInput): TopicRecord
       topicId = Number(result.lastInsertRowid)
     }
 
+    if (input.viewCount !== undefined) {
+      db.prepare('UPDATE topics SET view_count = ? WHERE id = ?').run(input.viewCount, topicId)
+    }
     db.prepare('DELETE FROM topic_tags WHERE topic_id = ?').run(topicId)
     const findTag = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE')
     const linkTag = db.prepare('INSERT OR IGNORE INTO topic_tags (topic_id, tag_id) VALUES (?, ?)')
