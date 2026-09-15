@@ -2,7 +2,8 @@
   <a class="skip-link" href="#main-content">跳到主要内容</a>
   <NuxtLoadingIndicator
     :height="3"
-    :throttle="0"
+    :throttle="80"
+    :hide-delay="0"
     color="var(--tertiary)"
     error-color="var(--danger)"
   />

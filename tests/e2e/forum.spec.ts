@@ -177,6 +177,47 @@ test('public visitors can browse topics without account controls', async ({ page
   await expect(page.getByRole('link', { name: /登录|注册|发帖/ })).toHaveCount(0)
 })
 
+test('shows route progress only for a pending navigation and hides when it completes', async ({ page, request }) => {
+  const response = await request.get('/api/topics?pageSize=1')
+  const topicPage = await response.json() as { items: Array<{ id: number }> }
+  const topic = topicPage.items[0]!
+  let markRequestStarted!: () => void
+  let releaseRequest!: () => void
+  const requestStarted = new Promise<void>((resolve) => { markRequestStarted = resolve })
+  const requestGate = new Promise<void>((resolve) => { releaseRequest = resolve })
+
+  await page.goto('/')
+  await page.route(`**/api/topics/${topic.id}`, async (route) => {
+    markRequestStarted()
+    await requestGate
+    await route.continue()
+  })
+
+  const indicator = page.locator('.nuxt-loading-indicator')
+  await indicator.evaluate((element) => {
+    const startedAt = performance.now()
+    const observer = new MutationObserver(() => {
+      if (getComputedStyle(element).opacity === '1' && !element.getAttribute('data-visible-delay')) {
+        element.setAttribute('data-visible-delay', String(performance.now() - startedAt))
+        observer.disconnect()
+      }
+    })
+    observer.observe(element, { attributes: true, attributeFilter: ['style'] })
+  })
+  const navigation = page.locator(`[data-topic-id="${topic.id}"] [data-topic-title]`).click()
+
+  await requestStarted
+  await expect(indicator).toHaveCSS('opacity', '1')
+  const visibleDelay = Number(await indicator.getAttribute('data-visible-delay'))
+  expect(visibleDelay).toBeGreaterThanOrEqual(60)
+
+  releaseRequest()
+  await navigation
+  await expect(page).toHaveURL(new RegExp(`/t/${topic.id}$`))
+  await page.waitForTimeout(50)
+  expect(await indicator.evaluate(element => getComputedStyle(element).opacity)).toBe('0')
+})
+
 test('public topic identifies JayBing as the visible author', async ({ page, request }) => {
   const response = await request.get('/api/topics?pageSize=1')
   const topicPage = await response.json() as { items: Array<{ id: number, slug: string }> }
