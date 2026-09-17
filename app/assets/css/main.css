@@ -67,7 +67,7 @@
 }
 
 .nuxt-loading-indicator {
-  transition: transform 0.1s !important;
+  transition: transform 0.1s, opacity 0s !important;
 }
 
 * {
