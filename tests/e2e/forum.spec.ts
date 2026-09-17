@@ -166,13 +166,17 @@ test('image upload API rejects files whose bytes are not an allowed image', asyn
   expect(response.status()).toBe(415)
 })
 
-test('public visitors can browse topics without account controls', async ({ page }) => {
+test('public visitors can browse topics without account controls or view counts', async ({ page, request }) => {
+  const topicPage = await (await request.get('/api/topics?pageSize=1')).json() as { items: Array<Record<string, unknown>> }
+  expect(topicPage.items[0]).not.toHaveProperty('viewCount')
+
   await page.goto('/')
 
   await expect(page.getByRole('columnheader', { name: '主题' })).toBeVisible()
-  await expect(page.getByRole('columnheader', { name: '浏览' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: '浏览' })).toHaveCount(0)
   await expect(page.getByRole('columnheader', { name: '活动' })).toBeVisible()
   await expect(page.getByText('Squoosh：在浏览器里压缩图片').first()).toBeVisible()
+  await expect(page.locator('.topic-list-data.views')).toHaveCount(0)
   await expect(page.getByText('Squoosh 可以直观比较压缩前后的画质和体积').first()).toHaveCount(0)
   await expect(page.getByRole('link', { name: /登录|注册|发帖/ })).toHaveCount(0)
 })
@@ -256,6 +260,7 @@ test('public topic identifies JayBing as the visible author', async ({ page, req
   await expect(page).toHaveURL(new RegExp(`/t/${topic.id}$`))
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', new RegExp(`/t/${topic.id}$`))
   await expect(page.locator('.post-number')).toHaveText(`#${topic.id}`)
+  await expect(page.locator('.post-infos')).not.toContainText('浏览')
   await expect(page.locator('.topic-meta-data .names strong')).toHaveText('JayBing')
 })
 
@@ -798,6 +803,7 @@ test('administrator can set view counts while ordinary edits preserve new visits
   expect(topic.viewCount).toBe(12)
   expect((await request.put(`/api/studio/topics/${topic.id}`, { data: { ...payload, viewCount: 999 } })).status()).toBe(401)
   await page.goto('/admin')
+  await expect(page.getByRole('columnheader', { name: '浏览' })).toBeVisible()
   const row = page.getByRole('row').filter({ hasText: payload.title })
   const composer = page.getByRole('dialog', { name: '编辑帖子' })
 
@@ -818,7 +824,7 @@ test('administrator can set view counts while ordinary edits preserve new visits
     expect(saved.viewCount).toBe(count === '' ? 433 : Number(count))
     await expect(composer).toBeHidden()
     const publicTopic = await (await request.get(`/api/topics/${topic.id}`)).json()
-    expect(publicTopic.viewCount).toBe(saved.viewCount)
+    expect(publicTopic).not.toHaveProperty('viewCount')
   }
 })
 

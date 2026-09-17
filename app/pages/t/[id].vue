@@ -100,7 +100,6 @@ onMounted(() => {
               <div class="topic-meta-data">
                 <div class="names"><strong>JayBing</strong><span>内容维护者</span></div>
                 <div class="post-infos">
-                  <span>{{ topic.viewCount }} 次浏览</span>
                   <time :datetime="topic.publishedAt || topic.createdAt">{{ formatDottedDate(topic.publishedAt || topic.createdAt) }}</time>
                   <span class="post-number">#{{ topic.id }}</span>
                 </div>
@@ -135,7 +134,7 @@ onMounted(() => {
         <section v-if="relatedTopics.length" class="suggested-topics">
           <h2>推荐主题</h2>
           <table class="topic-list" aria-label="推荐主题">
-            <thead class="topic-list-header"><tr><th class="topic-list-data default">主题</th><th class="topic-list-data num views">浏览</th><th class="topic-list-data num activity">活动</th></tr></thead>
+            <thead class="topic-list-header"><tr><th class="topic-list-data default">主题</th><th class="topic-list-data num activity">活动</th></tr></thead>
             <tbody class="topic-list-body"><TopicRow v-for="item in relatedTopics" :key="item.id" :topic="item" :available-tags="tags" /></tbody>
           </table>
         </section>

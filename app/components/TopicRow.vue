@@ -15,13 +15,6 @@ const externalHost = computed(() => {
   }
 })
 
-const compactViews = computed(() => {
-  const value = props.topic.viewCount
-  if (value < 1000) return String(value)
-  if (value < 10_000) return `${(value / 1000).toFixed(1).replace('.0', '')}k`
-  return `${Math.round(value / 1000)}k`
-})
-
 const activityDate = computed(() => new Date(props.topic.publishedAt || props.topic.updatedAt))
 const activityLabel = computed(() => formatDottedDate(activityDate.value))
 const activityTitle = computed(() => new Intl.DateTimeFormat('zh-CN', {
@@ -60,11 +53,6 @@ function tagUrl(name: string): string {
         </NuxtLink>
         <span v-if="externalHost" class="topic-featured-link">↗ {{ externalHost }}</span>
       </div>
-    </td>
-
-    <td class="num views topic-list-data">
-      <span class="number">{{ compactViews }}</span>
-      <span class="mobile-stat-label">浏览</span>
     </td>
 
     <td class="activity num topic-list-data">

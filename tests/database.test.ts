@@ -512,7 +512,7 @@ describe('forum database', () => {
     expect(recordTopicView(db, topic.id, 'visitor-a', morning)).toBe(true)
     expect(recordTopicView(db, topic.id, 'visitor-a', morning)).toBe(false)
     expect(recordTopicView(db, topic.id, 'visitor-a', nextDay)).toBe(true)
-    expect(getPublicTopic(db, topic.id)?.viewCount).toBe(2)
+    expect(getStudioTopic(db, topic.id)?.viewCount).toBe(2)
   })
 
   it('does not count views for drafts even when their numeric id is guessed', () => {
@@ -621,7 +621,7 @@ describe('forum database', () => {
     expect((db.prepare('SELECT COUNT(*) AS count FROM topic_views').get() as { count: number }).count).toBe(1)
     expect((db.prepare('SELECT COUNT(*) AS count FROM admin_sessions').get() as { count: number }).count).toBe(1)
     expect((db.prepare('SELECT COUNT(*) AS count FROM page_views').get() as { count: number }).count).toBe(1)
-    expect(getPublicTopic(db, topic.id)?.viewCount).toBe(2)
+    expect(getStudioTopic(db, topic.id)?.viewCount).toBe(2)
   })
 
   it('keeps distinct tag names even when their readable slugs would collide', () => {

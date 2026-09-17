@@ -28,7 +28,6 @@ export interface TopicSummary {
   status: 'draft' | 'published'
   isPinned: boolean
   externalUrl: string | null
-  viewCount: number
   publishedAt: string | null
   createdAt: string
   updatedAt: string
@@ -49,6 +48,7 @@ export interface TopicPage {
 }
 
 export interface StudioTopic extends TopicSummary {
+  viewCount: number
   contentMarkdown: string
 }
 

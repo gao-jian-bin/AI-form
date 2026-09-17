@@ -10,7 +10,7 @@ export default defineEventHandler((event) => {
 
     return {
       ...page,
-      items: page.items.map(({ contentMarkdown: _content, ...topic }) => topic),
+      items: page.items.map(({ contentMarkdown: _content, viewCount: _views, ...topic }) => topic),
     }
   }
   catch (error) {

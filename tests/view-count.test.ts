@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createForumDatabase, ensureBaseCategories, getPublicTopic, migrateForumDatabase, recordTopicView, saveTopic } from '../server/utils/database'
+import { createForumDatabase, ensureBaseCategories, getStudioTopic, migrateForumDatabase, recordTopicView, saveTopic } from '../server/utils/database'
 import { parseTopicPayload } from '../server/utils/validation'
 
 const input = {
@@ -36,6 +36,6 @@ describe('administrator view counts', () => {
     expect(reset.viewCount).toBe(0)
     expect(reset.id).toBe(topic.id)
     recordTopicView(db, topic.id, 'visitor-b')
-    expect(getPublicTopic(db, topic.id)?.viewCount).toBe(1)
+    expect(getStudioTopic(db, topic.id)?.viewCount).toBe(1)
   })
 })

@@ -110,7 +110,6 @@ function submitFullPageSearch() {
             <thead class="topic-list-header">
               <tr>
                 <th class="topic-list-data default">主题</th>
-                <th class="topic-list-data num views">浏览</th>
                 <th class="topic-list-data num activity">活动</th>
               </tr>
             </thead>

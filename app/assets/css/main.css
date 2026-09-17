@@ -681,16 +681,8 @@ select {
   white-space: nowrap;
 }
 
-.topic-list-data.views .number {
-  color: var(--primary-high);
-}
-
 .topic-list-data.activity time {
   color: var(--primary-medium);
-}
-
-.mobile-stat-label {
-  display: none;
 }
 
 .topic-list-loading {
@@ -2803,10 +2795,6 @@ html.composer-fullscreen body {
     font-size: 11px;
   }
 
-  .mobile-stat-label {
-    display: inline;
-  }
-
   .topic-list-item .activity time::before {
     content: "活动 ";
   }
@@ -2824,10 +2812,6 @@ html.composer-fullscreen body {
 
   .topic-meta-data {
     min-height: 38px;
-  }
-
-  .post-infos span:first-child {
-    display: none;
   }
 
   .suggested-topics {

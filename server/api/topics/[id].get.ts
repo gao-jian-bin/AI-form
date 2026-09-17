@@ -8,10 +8,10 @@ export default defineEventHandler((event) => {
   const id = numericRouteId(getRouterParam(event, 'id'))
   const topic = getPublicTopic(getForumDatabase(), id)
   if (!topic) throw createError({ statusCode: 404, message: '主题不存在' })
+  const { contentMarkdown, viewCount: _views, ...publicTopic } = topic
 
   return {
-    ...topic,
-    contentMarkdown: undefined,
-    contentHtml: renderSafeMarkdown(topic.contentMarkdown),
+    ...publicTopic,
+    contentHtml: renderSafeMarkdown(contentMarkdown),
   }
 })
