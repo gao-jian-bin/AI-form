@@ -10,7 +10,7 @@ function goHome() {
 
 <template>
   <div class="error-page">
-    <img class="brand-logo" src="/logo.svg" alt="网站 Logo">
+    <img class="brand-logo" src="/fused_logo_exact.svg" alt="网站 Logo">
     <p>{{ error.statusCode || 500 }}</p>
     <h1>{{ error.statusCode === 404 ? '这个页面不存在' : '页面暂时无法打开' }}</h1>
     <p>{{ getErrorMessage(error, '请稍后再试。') }}</p>

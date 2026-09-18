@@ -56,7 +56,7 @@ onMounted(() => {
 
           <div class="title">
             <NuxtLink id="site-logo" to="/" aria-label="首页">
-              <img class="site-logo-image" src="/logo.svg" alt="">
+              <img class="site-logo-image" src="/fused_logo_exact.svg" alt="">
             </NuxtLink>
           </div>
 

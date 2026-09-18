@@ -12,7 +12,7 @@ const isAnalyticsRoute = computed(() => route.path.startsWith('/admin/analytics'
     <header class="studio-header">
       <div class="studio-header__primary">
         <NuxtLink to="/admin" class="studio-brand">
-          <img class="brand-logo brand-logo-small" src="/logo.svg" alt="">
+          <img class="brand-logo brand-logo-small" src="/fused_logo_exact.svg" alt="">
           <span>内容工作台</span>
         </NuxtLink>
         <nav class="studio-nav" aria-label="工作台导航">
