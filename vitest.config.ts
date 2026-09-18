@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'node',
-    exclude: ['tests/e2e/**', 'node_modules/**'],
+    exclude: ['tests/e2e/**', '**/.worktrees/**', '**/node_modules/**'],
     coverage: {
       reporter: ['text', 'html'],
     },

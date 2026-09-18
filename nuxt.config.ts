@@ -12,6 +12,7 @@ export default defineNuxtConfig({
         { name: 'description', content: '收录 ChatGPT 技巧、AI 学习框架与实用工具。' },
       ],
       link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' },
         { rel: 'alternate', type: 'application/atom+xml', title: '', href: '/feed.xml' },
       ],
     },
