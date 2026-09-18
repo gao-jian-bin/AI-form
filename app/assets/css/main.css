@@ -180,7 +180,6 @@ select {
   min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 9px;
   color: var(--header-primary);
 }
 
@@ -189,15 +188,6 @@ select {
   height: 36px;
   flex: 0 0 auto;
   display: block;
-}
-
-.site-logo-text {
-  overflow: hidden;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .d-header .panel {
@@ -2845,10 +2835,6 @@ html.composer-fullscreen body {
 }
 
 @media (max-width: 700px) {
-  .site-logo-text {
-    font-size: 18px;
-  }
-
   .navigation-container {
     display: grid;
     grid-template-columns: 1fr auto;

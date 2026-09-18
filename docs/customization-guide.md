@@ -2,7 +2,7 @@
 
 这份指南只列站点最常改的位置。修改后运行 `npm.cmd run dev`，浏览器会自动热更新。
 
-## 1. 修改 Logo 和站点名称
+## 1. 修改 Logo
 
 Logo 文件：
 
@@ -10,15 +10,7 @@ Logo 文件：
 public/logo.svg
 ```
 
-替换这个文件即可同时更新公共页顶部、内容工作台、错误页和浏览器标签页图标。建议使用带 `viewBox` 的正方形 SVG；如果换成 PNG，还要同步修改组件和 `nuxt.config.ts` 中的文件名。
-
-顶部显示名称：
-
-```text
-app/components/SiteHeader.vue
-```
-
-搜索 `AI 知识论坛` 修改链接文字；Logo 的显示尺寸在 `app/assets/css/main.css` 中由 `.site-logo-image` 和 `.brand-logo` 控制。
+替换这个文件即可同时更新公共页顶部、内容工作台、错误页和浏览器标签页图标。公共页顶部只显示 Logo，不显示站点名称。建议使用带 `viewBox` 的正方形 SVG；如果换成 PNG，还要同步修改组件和 `nuxt.config.ts` 中的文件名。Logo 的显示尺寸在 `app/assets/css/main.css` 中由 `.site-logo-image` 和 `.brand-logo` 控制。
 
 浏览器标题与默认描述：
 
