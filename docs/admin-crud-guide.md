@@ -36,10 +36,9 @@ ai-forum-local-admin
 
 正式服务器必须在 `.env` 中设置 `ADMIN_PASSWORD_HASH`，不能继续依赖开发密码。
 
-登录后的顶部有两个入口：
+登录后通过左侧导航访问工作台概览、帖子、板块、标签、图片和访问统计。桌面可点击左上角收起侧栏，手机上点击同一按钮展开导航。
 
-- **帖子管理**：创建、查看、编辑和删除内容。
-- **板块管理**：维护左侧的 ChatGPT、工具箱以及以后新增的板块。
+顶部搜索或 `Ctrl/Cmd + K` 可快速跳转后台页面，也能按标题搜索帖子。顶部可切换深浅色，侧栏底部可退出登录。帖子列表保留 `/admin` 地址，并新增搜索、板块筛选及每页 20 条的分页。
 
 普通访客看不到后台操作按钮，也不能调用管理接口。
 
@@ -123,7 +122,7 @@ ai-forum-local-admin
 
 ## 5. 标签怎么维护
 
-标签不需要进入单独的管理页。点击编辑器里的“添加标签”，会直接列出数据库中已经使用过的标签，包括草稿所用标签；可以搜索后点选，也可以输入新名称后创建。
+在侧栏“标签管理”中可以创建、改名、搜索和删除标签。改名会同步更新关联帖子；删除只会移除标签关联，不会删除帖子。编辑器里的“选择标签”会列出已有标签，包括未使用和草稿所用标签；可以搜索后点选，也可以输入新名称后创建。
 
 已选择的标签会显示成小方块，点击旁边的 `×` 即可移除。每篇帖子最多选择 8 个标签。
 
@@ -179,13 +178,14 @@ Docker 服务器备份步骤在项目 `README.md` 的“数据备份与恢复”
 | `app/pages/t/[slug]/[id].vue` | 公开帖子页和管理员小铅笔入口 |
 | `app/pages/admin/categories/` | 板块管理页面 |
 | `app/components/CategoryEditor.vue` | 板块表单 |
-| `app/layouts/studio.vue` | 后台顶部导航 |
+| `app/layouts/studio.vue` | 后台侧栏、移动导航、快捷搜索和顶部工具栏 |
 | `server/api/studio/topics/` | 帖子管理接口 |
 | `server/api/studio/tags/index.get.ts` | 管理员标签候选接口 |
 | `server/api/studio/categories/` | 板块管理接口 |
 | `server/utils/validation.ts` | 管理员输入校验 |
 | `server/utils/database.ts` | SQLite 表和增删改查逻辑 |
-| `app/assets/css/main.css` | 公共页面与后台样式 |
+| `app/assets/css/main.css` | 公共页面与编辑器基础样式 |
+| `app/assets/css/studio.css` | 后台独立主题和响应式样式 |
 
 正常增加板块和帖子不要改这些文件，直接使用后台。只有要改变功能、字段或页面布局时才修改源码。
 

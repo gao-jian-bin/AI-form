@@ -29,6 +29,8 @@
 
 界面结构参考了 `discourse/discourse` 提交 `c69b1bb8`，没有引入 Discourse 的 Rails、Ember 代码或品牌素材。
 
+管理后台采用 [shadcn-admin](https://github.com/satnaing/shadcn-admin) 的 Vue/Nuxt 适配，包含可折叠侧栏、概览、内容管理、资源管理、快捷搜索和深浅色主题；公开阅读界面不变。参见 [后台重构说明](docs/admin-shadcn-refactor.md) 和 [第三方许可](THIRD_PARTY_NOTICES.md)。
+
 ## 本地运行
 
 需要 Node.js 22 或 24。

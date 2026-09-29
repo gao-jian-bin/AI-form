@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowLeft, Save, Hash } from '@lucide/vue'
 import type { ForumTag } from '~/types/forum'
 import { getErrorMessage } from '~/utils/error-message'
 
@@ -28,16 +29,9 @@ async function save() {
 
 <template>
   <section class="category-editor-page">
-    <header class="editor-heading">
-      <div>
-        <p class="stream-eyebrow">TAG SETTINGS</p>
-        <h1>{{ tag ? '编辑标签' : '新建标签' }}</h1>
-        <p>{{ tag ? '修改后，已关联帖子会自动显示新名称。' : '先建立标签，之后在帖子编辑器中直接选择。' }}</p>
-      </div>
-      <div class="editor-actions">
-        <NuxtLink to="/admin/tags" class="button button-quiet">返回标签管理</NuxtLink>
-      </div>
-    </header>
+    <StudioPageHeader :title="tag ? '编辑标签' : '新建标签'" :description="tag ? '修改后，已关联帖子会自动显示新名称。' : '创建一个关键词，连接不同板块中的相关内容。'" eyebrow="TAG SETTINGS">
+      <NuxtLink to="/admin/tags" class="button button-quiet"><ArrowLeft :size="16" />返回标签管理</NuxtLink>
+    </StudioPageHeader>
 
     <div class="editor-grid category-editor-grid">
       <form class="editor-fields" @submit.prevent="save">
@@ -56,6 +50,7 @@ async function save() {
 
         <div class="category-form-actions">
           <button class="button button-primary" type="submit" :disabled="busy">
+            <Save :size="16" />
             {{ busy ? '正在保存…' : tag ? '保存修改' : '创建标签' }}
           </button>
           <NuxtLink to="/admin/tags" class="button button-quiet">取消</NuxtLink>
@@ -63,6 +58,7 @@ async function save() {
       </form>
 
       <aside class="category-editor-help">
+        <div class="admin-form-preview"><p>标签预览</p><div class="admin-category-name"><span class="admin-tag-icon"><Hash :size="20" /></span><div><strong>{{ form.name || '新的关键词' }}</strong><small>{{ tag?.topicCount || 0 }} 篇关联帖子</small></div></div></div>
         <h2>标签如何工作？</h2>
         <dl>
           <div><dt>创建</dt><dd>创建后即使还没有帖子使用，也会出现在编辑器的标签选项中。</dd></div>

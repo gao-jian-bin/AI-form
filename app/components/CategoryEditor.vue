@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ArrowLeft, Save, FolderOpen } from '@lucide/vue'
 import type { StudioCategory } from '~/types/forum'
 import { getErrorMessage } from '~/utils/error-message'
 
@@ -36,16 +37,9 @@ async function save() {
 
 <template>
   <section class="category-editor-page">
-    <header class="editor-heading">
-      <div>
-        <p class="stream-eyebrow">CATEGORY SETTINGS</p>
-        <h1>{{ category ? '编辑板块' : '新建板块' }}</h1>
-        <p>{{ category ? '修改访客看到的板块信息，网址标识会保持不变。' : '创建一个新的内容分区，随后就能在里面发布帖子。' }}</p>
-      </div>
-      <div class="editor-actions">
-        <NuxtLink to="/admin/categories" class="button button-quiet">返回板块管理</NuxtLink>
-      </div>
-    </header>
+    <StudioPageHeader :title="category ? '编辑板块' : '新建板块'" :description="category ? '更新板块信息，让内容结构保持清晰。原有网址保持不变。' : '为新的知识方向建立一个专属内容分区。'" eyebrow="CATEGORY SETTINGS">
+      <NuxtLink to="/admin/categories" class="button button-quiet"><ArrowLeft :size="16" />返回板块管理</NuxtLink>
+    </StudioPageHeader>
 
     <div class="editor-grid category-editor-grid">
       <form class="editor-fields" @submit.prevent="save">
@@ -90,6 +84,7 @@ async function save() {
 
         <div class="category-form-actions">
           <button class="button button-primary" type="submit" :disabled="busy">
+            <Save :size="16" />
             {{ busy ? '正在保存…' : category ? '保存修改' : '创建板块' }}
           </button>
           <NuxtLink to="/admin/categories" class="button button-quiet">取消</NuxtLink>
@@ -97,6 +92,11 @@ async function save() {
       </form>
 
       <aside class="category-editor-help">
+        <div class="admin-form-preview">
+          <p>板块预览</p>
+          <div class="admin-category-name"><span class="admin-category-icon" :style="{ '--category-color': form.color }"><FolderOpen :size="20" /></span><div><strong>{{ form.name || '新的内容板块' }}</strong><small>{{ form.description || '用一句话介绍这里的内容。' }}</small></div></div>
+          <small>/c/{{ form.slug || 'your-category' }}</small>
+        </div>
         <h2>这些字段有什么用？</h2>
         <dl>
           <div><dt>名称</dt><dd>显示在左侧分类导航和帖子列表中，可以随时修改。</dd></div>

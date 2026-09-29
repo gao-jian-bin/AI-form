@@ -1,7 +1,9 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-08-20',
   devtools: { enabled: false },
-  css: ['~/assets/css/main.css'],
+  css: ['~/assets/css/main.css', '~/assets/css/studio.css'],
+  // Tree-shake UI libraries before Nitro traces the production server.
+  build: { transpile: ['@lucide/vue', 'reka-ui'] },
   app: {
     head: {
       htmlAttrs: { lang: 'zh-CN' },

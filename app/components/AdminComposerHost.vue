@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic } from '~/types/forum'
 import { getErrorMessage } from '~/utils/error-message'
 
-const { request, collapsed, close, toggleCollapsed, markSaved } = useAdminComposer()
+const { request, collapsed, dirty, close, toggleCollapsed, markSaved } = useAdminComposer()
 const router = useRouter()
 const categories = ref<ForumCategory[]>([])
 const knownTags = ref<ForumTag[]>([])
@@ -11,7 +11,6 @@ const topic = ref<StudioTopic | null>(null)
 const loading = ref(false)
 const loadError = ref('')
 const tagLoadError = ref(false)
-const dirty = ref(false)
 let removeNavigationGuard: (() => void) | undefined
 
 watch(request, async (next) => {

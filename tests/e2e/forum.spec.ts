@@ -188,8 +188,11 @@ test('does not flash route progress for a fast navigation', async ({ page, reque
   const topicResponse = await request.get(`/api/topics/${topic.id}`)
 
   await page.goto('/')
+  // Keep the fast-path assertion independent of machine load and cold JS chunks.
+  // The next test separately exercises a real pending navigation past the throttle.
+  await page.clock.install({ time: new Date('2026-09-30T00:00:00Z') })
+  await page.clock.pauseAt(new Date('2026-09-30T00:00:01Z'))
   await page.route(`**/api/topics/${topic.id}`, async (route) => {
-    await new Promise(resolve => setTimeout(resolve, 100))
     await route.fulfill({ response: topicResponse })
   })
 
@@ -204,8 +207,19 @@ test('does not flash route progress for a fast navigation', async ({ page, reque
   })
 
   await page.locator(`[data-topic-id="${topic.id}"] [data-topic-title]`).click()
-  await expect(page).toHaveURL(new RegExp(`/t/${topic.id}$`))
-  await page.waitForTimeout(350)
+  // Advance microtasks/animation frames, but keep the navigation below 300 ms
+  // of virtual time even when the host's real scheduling is slow.
+  let elapsed = 0
+  await expect.poll(async () => {
+    await page.clock.runFor(2)
+    elapsed += 2
+    // Vue Router updates the URL before Nuxt's async page setup has finished.
+    // Wait for the actual topic screen, not just the address bar.
+    return new URL(page.url()).pathname === `/t/${topic.id}`
+      && await page.locator('#topic-title h1').isVisible()
+  }, { intervals: [50], timeout: 5_000 }).toBe(true)
+  expect(elapsed).toBeLessThan(300)
+  await page.clock.runFor(350)
   await expect(indicator).not.toHaveAttribute('data-was-visible', 'true')
 })
 
@@ -367,7 +381,7 @@ test('owner can create a draft that stays out of the public topic stream', async
 
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('button', { name: '新建帖子' }).click()
   await expect(page.getByText('创建新帖子', { exact: true })).toBeVisible()
   const formattingToolbar = page.getByRole('toolbar', { name: 'Markdown 工具栏' })
   const markdownEditor = page.getByLabel('正文 · Markdown')
@@ -521,7 +535,7 @@ test('composer renders quotes and keeps long editor panes independently scrollab
   const preformattedPreview = composer.locator('.d-editor-preview .code-block-wrapper')
   const copyPreformatted = preformattedPreview.getByRole('button', { name: '复制预格式化文本' })
   await expect(copyPreformatted).toBeVisible()
-  await expect(preformattedPreview.locator('pre')).toHaveCSS('background-color', 'rgb(248, 248, 248)')
+  await expect(preformattedPreview.locator('pre')).toHaveCSS('background-color', 'rgb(248, 250, 252)')
   await copyPreformatted.click()
   await expect(copyPreformatted).toHaveText('已复制')
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -893,12 +907,12 @@ test('unsaved composer changes require confirmation before route navigation', as
   await titleInput.fill(`${await titleInput.inputValue()} - 尚未保存`)
 
   page.once('dialog', dialog => dialog.dismiss())
-  await page.getByRole('link', { name: /查看网站/ }).click()
+  await page.locator('.admin-topbar').getByRole('link', { name: /查看网站/ }).click()
   await expect(page).toHaveURL(/\/admin$/)
   await expect(composer).toBeVisible()
 
   page.once('dialog', dialog => dialog.accept())
-  await page.getByRole('link', { name: /查看网站/ }).click()
+  await page.locator('.admin-topbar').getByRole('link', { name: /查看网站/ }).click()
   await expect(page).toHaveURL(/\/$/)
   await expect(composer).toBeHidden()
 })
@@ -917,7 +931,7 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   await expect(page).toHaveURL(/\/admin$/)
 
   await page.getByRole('link', { name: '板块管理' }).click()
-  await page.getByRole('link', { name: '＋ 新建板块' }).click()
+  await page.getByRole('link', { name: '新建板块' }).click()
   await page.getByLabel('板块名称').fill(categoryName)
   await page.getByLabel('网址标识').fill(categorySlug)
   await page.getByLabel('板块说明').fill('图像生成与处理资源')
@@ -928,7 +942,7 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   await expect(page.getByText(categoryName, { exact: true })).toBeVisible()
 
   await page.getByRole('link', { name: '帖子管理' }).click()
-  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('button', { name: '新建帖子' }).click()
   await page.getByRole('textbox', { name: '标题', exact: true }).fill(draftTitle)
   await page.getByLabel('分类').selectOption(categorySlug)
   await page.getByLabel('外部网站地址').fill('https://example.com/ai-image')
@@ -948,7 +962,7 @@ test('owner can manage categories and use them in the topic editor', async ({ pa
   await page.getByRole('row').filter({ hasText: categorySlug }).getByRole('button', { name: '删除' }).click()
   await expect(page.getByRole('alert')).toContainText('板块中还有帖子，请先移动或删除这些帖子')
 
-  await page.getByRole('link', { name: '＋ 新建板块' }).click()
+  await page.getByRole('link', { name: '新建板块' }).click()
   await page.getByLabel('板块名称').fill('临时空板块')
   await page.getByLabel('网址标识').fill(emptySlug)
   await page.getByLabel('板块颜色').fill('#64748b')
@@ -973,7 +987,7 @@ test('owner can manage tags, select one, and the chooser closes after selection'
   })
   expect(missingUpdate.status()).toBe(404)
   await page.getByRole('link', { name: '标签管理' }).click()
-  await page.getByRole('link', { name: '＋ 新建标签' }).click()
+  await page.getByRole('link', { name: '新建标签' }).click()
   await page.getByLabel('标签名称').fill(originalName)
   await page.getByRole('button', { name: '创建标签' }).click()
 
@@ -986,7 +1000,7 @@ test('owner can manage tags, select one, and the chooser closes after selection'
   await expect(page.getByRole('row').filter({ hasText: renamedTag })).toBeVisible()
 
   await page.getByRole('link', { name: '帖子管理' }).click()
-  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('button', { name: '新建帖子' }).click()
   const composer = page.getByRole('dialog', { name: '创建新帖子' })
   await composer.getByRole('textbox', { name: '标题', exact: true }).fill(topicTitle)
   await composer.getByLabel('正文 · Markdown').fill('用于验收标签管理。')
@@ -1054,7 +1068,7 @@ test('composer recovers a newer browser-local draft only after administrator app
   await page.goto('/admin')
   await page.getByLabel('管理员密码').fill('ai-forum-local-admin')
   await page.getByRole('button', { name: '进入工作台' }).click()
-  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('button', { name: '新建帖子' }).click()
   let composer = page.getByRole('dialog', { name: '创建新帖子' })
   await composer.getByRole('textbox', { name: '标题', exact: true }).fill(title)
   await composer.getByLabel('正文 · Markdown').fill('这段内容只在浏览器本机暂存。')
@@ -1062,7 +1076,7 @@ test('composer recovers a newer browser-local draft only after administrator app
 
   page.once('dialog', dialog => dialog.accept())
   await composer.getByRole('button', { name: '关闭编辑器' }).click()
-  await page.getByRole('button', { name: '＋ 新建帖子' }).click()
+  await page.getByRole('button', { name: '新建帖子' }).click()
   composer = page.getByRole('dialog', { name: '创建新帖子' })
   await expect(composer.getByText('发现未保存的本机草稿')).toBeVisible()
   await composer.getByRole('button', { name: '恢复', exact: true }).click()

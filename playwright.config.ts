@@ -3,6 +3,8 @@ import { defineConfig, devices } from '@playwright/test'
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
+  // All browser tests use one temporary SQLite instance; do not race files.
+  workers: 1,
   retries: process.env.CI ? 2 : 0,
   reporter: 'line',
   use: {

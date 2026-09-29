@@ -7,6 +7,7 @@ export interface AdminComposerRequest {
 export function useAdminComposer() {
   const request = useState<AdminComposerRequest | null>('admin-composer-request', () => null)
   const collapsed = useState('admin-composer-collapsed', () => false)
+  const dirty = useState('admin-composer-dirty', () => false)
   const revision = useState('admin-composer-revision', () => 0)
 
   function openEdit(topicId: number) {
@@ -22,6 +23,7 @@ export function useAdminComposer() {
   function close() {
     request.value = null
     collapsed.value = false
+    dirty.value = false
   }
 
   function toggleCollapsed() {
@@ -35,6 +37,7 @@ export function useAdminComposer() {
   return {
     request,
     collapsed,
+    dirty,
     revision,
     openEdit,
     openNew,
