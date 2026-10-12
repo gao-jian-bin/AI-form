@@ -3,6 +3,7 @@ import type { ForumCategory, ForumTag, TopicPage } from '~/types/forum'
 import { getErrorMessage } from '~/utils/error-message'
 
 const route = useRoute()
+const config = useRuntimeConfig()
 const page = computed(() => typeof route.query.page === 'string' ? route.query.page : '1')
 const { data: categories } = await useFetch<ForumCategory[]>('/api/categories', { default: () => [] })
 const { data: tags } = await useFetch<ForumTag[]>('/api/tags', { default: () => [] })
@@ -13,14 +14,14 @@ const { data: topicPage, status, error, refresh } = await useFetch<TopicPage>('/
 useCanonical(() => Number(page.value) > 1 ? `/?page=${page.value}` : '/')
 
 useSeoMeta({
-  title: '最新帖子',
+  title: String(config.public.siteName || 'Pandora'),
   description: '持续收录 ChatGPT 技巧、AI 学习框架与实用在线工具。',
 })
 </script>
 
 <template>
   <ForumPage
-    title="最新帖子"
+    title="主题帖子"
     description="按发布时间整理的全部知识条目。置顶内容适合第一次来时先读。"
     :topics="topicPage.items"
     :pagination="topicPage"

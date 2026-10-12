@@ -30,7 +30,7 @@ watch(() => route.fullPath, () => { sidebarOpen.value = false })
             <li class="sidebar-section-link-wrapper">
               <NuxtLink to="/" class="sidebar-section-link" :class="{ active: route.path === '/' }" @click="sidebarOpen = false">
                 <svg class="sidebar-section-link-prefix" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
-                <span class="sidebar-section-link-content-text">最新帖子</span>
+                <span class="sidebar-section-link-content-text">主题帖子</span>
               </NuxtLink>
             </li>
           </ul>

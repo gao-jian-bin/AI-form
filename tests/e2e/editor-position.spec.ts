@@ -67,3 +67,51 @@ for (const width of [1280, 390]) {
     }
   })
 }
+
+test('scrolling either editor pane synchronizes the other without moving the selection', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
+  await page.request.post('/api/auth/login', { data: { password: 'ai-forum-local-admin' } })
+  await page.goto('/admin')
+  await expect(page.getByRole('button', { name: '切换到深色模式', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: /编辑帖子：/ }).first().click()
+  const composer = page.getByRole('dialog', { name: '编辑帖子', exact: true })
+  const editor = composer.getByLabel('正文 · Markdown')
+  const preview = composer.locator('.d-editor-preview-wrapper')
+  const content = Array.from({ length: 100 }, (_, index) =>
+    `## 段落 ${index}\n\n说明文字 **重点**。\n\n\`\`\`js\nconst value = ${index};\n\`\`\``,
+  ).join('\n\n')
+  await editor.fill(content)
+  await expect(preview).toContainText('段落 99')
+  await editor.evaluate(input => {
+    input.focus({ preventScroll: true })
+    input.setSelectionRange(10, 20)
+    input.scrollTop = 0
+    input.dispatchEvent(new Event('scroll'))
+  })
+  await expect.poll(() => preview.evaluate(element => element.scrollTop)).toBe(0)
+  const url = page.url()
+  for (const [source, target, delta] of [
+    [preview, editor, 1000],
+    [preview, editor, -400],
+    [editor, preview, 700],
+  ] as const) {
+    const before = await source.evaluate(element => element.scrollTop)
+    await source.hover()
+    await page.mouse.wheel(0, delta)
+    await expect.poll(() => source.evaluate(element => element.scrollTop)).not.toBe(before)
+    const ratio = await source.evaluate(element => element.scrollTop / (element.scrollHeight - element.clientHeight))
+    await expect.poll(() => target.evaluate(element => element.scrollTop / (element.scrollHeight - element.clientHeight)))
+      .toBeCloseTo(ratio, 2)
+    await page.waitForTimeout(250)
+    expect(await source.evaluate(element => element.scrollTop / (element.scrollHeight - element.clientHeight)))
+      .toBeCloseTo(ratio, 2)
+    expect(await editor.evaluate(input => [input.selectionStart, input.selectionEnd])).toEqual([10, 20])
+    expect(page.url()).toBe(url)
+  }
+  expect(errors).toEqual([])
+  if (process.env.EDITOR_QA_SCREENSHOT) {
+    await page.screenshot({ path: process.env.EDITOR_QA_SCREENSHOT.replace('.png', '-scroll.png') })
+  }
+})

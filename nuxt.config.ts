@@ -15,13 +15,13 @@ export default defineNuxtConfig({
       ],
       link: [
         { rel: 'icon', type: 'image/svg+xml', href: '/fused_logo_exact.svg' },
-        { rel: 'alternate', type: 'application/atom+xml', title: '', href: '/feed.xml' },
+        { rel: 'alternate', type: 'application/atom+xml', title: 'Pandora', href: '/feed.xml' },
       ],
     },
   },
   runtimeConfig: {
     public: {
-      siteName: '',
+      siteName: 'Pandora',
       siteDescription: '以论坛主题的方式整理 ChatGPT 方法和实用工具。',
     },
   },

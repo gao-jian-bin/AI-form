@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { ForumCategory, ForumTag, StudioTopic, TopicRevision } from '~/types/forum'
 import { clampComposerHeight } from '~/utils/composer-layout'
+import { createEditorScrollSync } from '~/utils/editor-scroll'
 import { getErrorMessage } from '~/utils/error-message'
 import {
   composerDraftKey,
@@ -149,16 +150,21 @@ function schedulePreview() {
   previewTimer = setTimeout(updatePreview, 220)
 }
 
+const syncEditorPanes = createEditorScrollSync()
+
 function syncPreviewScroll() {
   const input = textarea.value
   const preview = previewPane.value
   if (!input || !preview) return
 
-  const inputRange = input.scrollHeight - input.clientHeight
-  const previewRange = preview.scrollHeight - preview.clientHeight
-  preview.scrollTop = inputRange > 0 && previewRange > 0
-    ? (input.scrollTop / inputRange) * previewRange
-    : 0
+  syncEditorPanes(input, preview)
+}
+
+function syncEditorScroll() {
+  const input = textarea.value
+  const preview = previewPane.value
+  if (!input || !preview) return
+  syncEditorPanes(preview, input)
 }
 
 function draftFields(): ComposerDraftFields {
@@ -781,7 +787,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section ref="previewPane" class="d-editor-preview-wrapper">
+        <section ref="previewPane" class="d-editor-preview-wrapper" @scroll="syncEditorScroll">
           <MarkdownContent v-if="previewHtml" class="d-editor-preview" :html="previewHtml" />
           <div v-else class="preview-empty">输入正文后，这里会显示安全预览。</div>
         </section>
