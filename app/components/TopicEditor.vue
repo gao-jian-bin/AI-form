@@ -16,6 +16,7 @@ import {
   continueOrderedList,
   insertMarkdownBlock,
   type MarkdownAction,
+  type MarkdownEditResult,
 } from '~/utils/markdown-editor'
 
 const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif'
@@ -295,6 +296,23 @@ async function restoreRevision(revision: TopicRevision) {
   }
 }
 
+async function commitMarkdownEdit(edit: MarkdownEditResult) {
+  const input = textarea.value
+  const scrollTop = input?.scrollTop ?? 0
+  const scrollLeft = input?.scrollLeft ?? 0
+  form.contentMarkdown = edit.value
+  schedulePreview()
+  await nextTick()
+  if (!input || textarea.value !== input) return
+  // Updating a focused textarea's value can scroll it to the old/end caret.
+  // Restore the selection first, then the viewport, without scrolling the page.
+  input.focus({ preventScroll: true })
+  input.setSelectionRange(edit.selectionStart, edit.selectionEnd)
+  input.scrollTop = scrollTop
+  input.scrollLeft = scrollLeft
+  syncPreviewScroll()
+}
+
 async function applyTool(action: MarkdownAction) {
   const input = textarea.value
   if (!input) return
@@ -304,11 +322,7 @@ async function applyTool(action: MarkdownAction) {
     input.selectionEnd,
     action,
   )
-  form.contentMarkdown = edit.value
-  schedulePreview()
-  await nextTick()
-  input.focus()
-  input.setSelectionRange(edit.selectionStart, edit.selectionEnd)
+  await commitMarkdownEdit(edit)
 }
 
 function imageAltFromFilename(filename: string): string {
@@ -713,6 +727,7 @@ onBeforeUnmount(() => {
             type="button"
             :aria-label="tool.label"
             :title="tool.shortcut ? `${tool.label}（${tool.shortcut}）` : tool.label"
+            @mousedown.prevent
             @click="applyTool(tool.id)"
           >
             <span :class="{ 'is-italic': tool.id === 'italic' }">{{ tool.text }}</span>
